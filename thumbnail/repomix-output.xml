@@ -1,0 +1,3732 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.env.example
+.gitignore
+components.json
+eslint.config.js
+next.config.js
+package.json
+postcss.config.js
+prettier.config.js
+prisma/schema.prisma
+README.md
+src/app/actions/auth.ts
+src/app/actions/generate.ts
+src/app/api/auth/[...nextauth]/route.ts
+src/app/dashboard/DashboardClient.tsx
+src/app/dashboard/layout.tsx
+src/app/dashboard/loading-preview/page.tsx
+src/app/dashboard/page.tsx
+src/app/fonts.ts
+src/app/globals.css
+src/app/layout.tsx
+src/app/page.tsx
+src/app/signin/page.tsx
+src/app/signup/page.tsx
+src/components/credits.tsx
+src/components/dropzone.tsx
+src/components/LoadingScreen.tsx
+src/components/SessionProvider.tsx
+src/components/signout.tsx
+src/components/style.tsx
+src/components/thumbnail-creator.tsx
+src/components/ui/button.tsx
+src/components/ui/card.tsx
+src/components/ui/color-picker.tsx
+src/components/ui/input.tsx
+src/components/ui/label.tsx
+src/components/ui/popover.tsx
+src/components/ui/select.tsx
+src/components/ui/separator.tsx
+src/components/ui/signin.tsx
+src/components/ui/signup.tsx
+src/components/ui/slider.tsx
+src/components/ui/sonner.tsx
+src/components/ui/tabs.tsx
+src/components/ui/tooltip.tsx
+src/env.js
+src/lib/utils.ts
+src/middleware.ts
+src/schemas/auth.ts
+src/server/auth/config.ts
+src/server/auth/index.ts
+src/server/db.ts
+src/styles/globals.css
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".env.example">
+# Since the ".env" file is gitignored, you can use the ".env.example" file to
+# build a new ".env" file when you clone the repo. Keep this file up-to-date
+# when you add new variables to `.env`.
+
+# This file will be committed to version control, so make sure not to have any
+# secrets in it. If you are cloning this repo, create a copy of this file named
+# ".env" and populate it with your secrets.
+
+# When adding additional environment variables, the schema in "/src/env.js"
+# should be updated accordingly.
+
+# Next Auth
+# You can generate a new secret on the command line with:
+# npx auth secret
+# https://next-auth.js.org/configuration/options#secret
+AUTH_SECRET=""
+
+# Next Auth Discord Provider
+AUTH_DISCORD_ID=""
+AUTH_DISCORD_SECRET=""
+
+# Prisma
+# https://www.prisma.io/docs/reference/database-reference/connection-urls#env
+DATABASE_URL="file:./db.sqlite"
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# database
+/prisma/db.sqlite
+/prisma/db.sqlite-journal
+db.sqlite
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+# do not commit any .env files to git, except for the .env.example file. https://create.t3.gg/en/usage/env-variables#using-environment-variables
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# idea files
+.idea
+</file>
+
+<file path="components.json">
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "~/components",
+    "utils": "~/lib/utils",
+    "ui": "~/components/ui",
+    "lib": "~/lib",
+    "hooks": "~/hooks"
+  },
+  "iconLibrary": "lucide"
+}
+</file>
+
+<file path="eslint.config.js">
+import { FlatCompat } from "@eslint/eslintrc";
+import tseslint from "typescript-eslint";
+
+const compat = new FlatCompat({
+  baseDirectory: import.meta.dirname,
+});
+
+export default tseslint.config(
+  {
+    ignores: [".next"],
+  },
+  ...compat.extends("next/core-web-vitals"),
+  {
+    files: ["**/*.ts", "**/*.tsx"],
+    extends: [
+      ...tseslint.configs.recommended,
+      ...tseslint.configs.recommendedTypeChecked,
+      ...tseslint.configs.stylisticTypeChecked,
+    ],
+    rules: {
+      "@typescript-eslint/array-type": "off",
+      "@typescript-eslint/consistent-type-definitions": "off",
+      "@typescript-eslint/consistent-type-imports": [
+        "warn",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
+      ],
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: { attributes: false } },
+      ],
+    },
+  },
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: true,
+    },
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+      },
+    },
+  },
+);
+</file>
+
+<file path="next.config.js">
+/**
+ * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
+ * for Docker builds.
+ */
+import "./src/env.js";
+
+/** @type {import("next").NextConfig} */
+const config = {};
+
+export default config;
+</file>
+
+<file path="package.json">
+{
+  "name": "thumbnail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "check": "next lint && tsc --noEmit",
+    "db:generate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "dev": "next dev --turbo",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
+    "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
+    "postinstall": "prisma generate",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "preview": "next build && next start",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.7.2",
+    "@hookform/resolvers": "^5.0.1",
+    "@imgly/background-removal": "^1.6.0",
+    "@prisma/client": "^6.5.0",
+    "@radix-ui/react-label": "^2.1.6",
+    "@radix-ui/react-popover": "^1.1.13",
+    "@radix-ui/react-select": "^2.2.4",
+    "@radix-ui/react-separator": "^1.1.6",
+    "@radix-ui/react-slider": "^1.3.4",
+    "@radix-ui/react-slot": "^1.2.2",
+    "@radix-ui/react-tabs": "^1.1.11",
+    "@radix-ui/react-tooltip": "^1.2.6",
+    "@t3-oss/env-nextjs": "^0.12.0",
+    "@types/bcryptjs": "^3.0.0",
+    "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.510.0",
+    "next": "^15.2.3",
+    "next-auth": "^4.24.11",
+    "next-themes": "^0.4.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.56.3",
+    "react-icons": "^5.5.0",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.0.15",
+    "@types/node": "^20.14.10",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.23.0",
+    "eslint-config-next": "^15.2.3",
+    "postcss": "^8.5.3",
+    "prettier": "^3.5.3",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "prisma": "^6.5.0",
+    "tailwindcss": "^4.0.15",
+    "tw-animate-css": "^1.2.9",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.27.0"
+  },
+  "ct3aMetadata": {
+    "initVersion": "7.39.3"
+  },
+  "packageManager": "npm@10.5.0"
+}
+</file>
+
+<file path="postcss.config.js">
+export default {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+</file>
+
+<file path="prettier.config.js">
+/** @type {import('prettier').Config & import('prettier-plugin-tailwindcss').PluginOptions} */
+export default {
+  plugins: ["prettier-plugin-tailwindcss"],
+};
+</file>
+
+<file path="prisma/schema.prisma">
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
+    // Further reading:
+    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
+    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
+    url      = env("DATABASE_URL")
+}
+
+model Post {
+    id        Int      @id @default(autoincrement())
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    createdBy   User   @relation(fields: [createdById], references: [id])
+    createdById String
+
+    @@index([name])
+}
+
+// Necessary for Next auth
+model Account {
+    id                       String  @id @default(cuid())
+    userId                   String
+    type                     String
+    provider                 String
+    providerAccountId        String
+    refresh_token            String? // @db.Text
+    access_token             String? // @db.Text
+    expires_at               Int?
+    token_type               String?
+    scope                    String?
+    id_token                 String? // @db.Text
+    session_state            String?
+    user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    refresh_token_expires_in Int?
+
+    @@unique([provider, providerAccountId])
+}
+
+model Session {
+    id           String   @id @default(cuid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+    id            String    @id @default(cuid())
+    name          String?
+    email         String?   @unique
+    emailVerified DateTime?
+    image         String?
+    accounts      Account[]
+    sessions      Session[]
+    posts         Post[]
+    password      String
+    credits       Int       @default(10)
+}
+
+model VerificationToken {
+    identifier String
+    token      String   @unique
+    expires    DateTime
+
+    @@unique([identifier, token])
+}
+</file>
+
+<file path="README.md">
+# Create T3 App
+
+This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+
+## What's next? How do I make an app with this?
+
+We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+
+If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+
+- [Next.js](https://nextjs.org)
+- [NextAuth.js](https://next-auth.js.org)
+- [Prisma](https://prisma.io)
+- [Drizzle](https://orm.drizzle.team)
+- [Tailwind CSS](https://tailwindcss.com)
+- [tRPC](https://trpc.io)
+
+## Learn More
+
+To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+
+- [Documentation](https://create.t3.gg/)
+- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+
+You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+
+## How do I deploy this?
+
+Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+</file>
+
+<file path="src/app/actions/auth.ts">
+"use server";
+
+import { signInSchema } from "~/schemas/auth";
+import { db } from "~/server/db";
+import bcrypt from "bcryptjs";
+import { redirect } from "next/navigation";
+import { env } from "~/env";
+
+export const signup = async (email: string, password: string) => {
+  // Validation
+  const isValid = signInSchema.safeParse({ email, password });
+
+  if (isValid.error) {
+    return "Error";
+  }
+
+  // See if user exists
+  const user = await db.user.findUnique({
+    where: {
+      email: isValid.data.email,
+    },
+  });
+
+  if (user) {
+    return "User already exists";
+  }
+
+  // Encrypt password
+  const hash = await bcrypt.hash(isValid.data.password, 10);
+
+  // Create a stripe user
+ 
+
+  // Create the user
+  await db.user.create({
+    data: {
+      email: isValid.data.email,
+      password: hash,
+    },
+  });
+
+  // Redirect the user to signin, if is registered
+  redirect("/signin");
+};
+</file>
+
+<file path="src/app/actions/generate.ts">
+"use server";
+
+// Simple server-side actions for thumbnail generation
+
+/**
+ * Generate action - placeholder for any server-side processing
+ */
+export async function generate() {
+  console.log("Generate action called");
+  return Promise.resolve(true);
+}
+
+/**
+ * Refresh action - placeholder for any server-side refresh operation
+ */
+export async function refresh() {
+  console.log("Refresh action called");
+  return Promise.resolve(true);
+}
+</file>
+
+<file path="src/app/api/auth/[...nextauth]/route.ts">
+import NextAuth from "next-auth/next";
+import { authConfig } from "~/server/auth/config";
+
+export const GET = NextAuth(authConfig);
+export const POST = NextAuth(authConfig);
+</file>
+
+<file path="src/app/dashboard/DashboardClient.tsx">
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent, CardFooter } from "~/components/ui/card";
+import ThumbnailCreator from "~/components/thumbnail-creator";
+import { ImageIcon, Sparkles, Zap, Link2 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
+
+export default function DashboardClient() {
+  return (
+    <div className="">
+      <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+        Hi there,
+      </h1>
+      <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+        Want to create a thumbnail?
+      </h1>
+      <p className="mt-2 leading-7 text-muted-foreground">
+        Use one of the templates below
+      </p>
+
+      {/* Dashboard Content */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-7">
+        {/* Main Content - Thumbnail Creator */}
+        <Card className="col-span-1 lg:col-span-5 border-none shadow-sm bg-background/60 backdrop-blur-sm overflow-hidden">
+          <CardContent className="p-0">
+            <ThumbnailCreator>
+              <div className="flex items-center justify-center p-8 bg-muted/20 rounded-lg">
+                <div className="flex flex-col items-center text-center space-y-3">
+                  <Sparkles className="h-10 w-10 text-primary/70" />
+                  <p className="text-muted-foreground">
+                    Your thumbnails will appear here
+                  </p>
+                </div>
+              </div>
+            </ThumbnailCreator>
+          </CardContent>
+        </Card>
+
+        {/* Sidebar */}
+        <div className="col-span-1 lg:col-span-2 space-y-6 lg:sticky lg:top-6 lg:self-start">
+          {/* Stats Card */}
+          
+
+          {/* Tips Card */}
+          <Card className="border-none shadow-sm bg-gradient-to-br from-primary/5 to-primary/10 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <ImageIcon className="h-5 w-5 text-primary" />
+                  <h3 className="text-sm font-medium">Pro Tips</h3>
+                </div>
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>Use high-contrast images for best results</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>Keep text short and impactful</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>Try different templates for variety</span>
+                  </li>
+                </ul>
+              </div>
+            </CardContent>
+            <CardFooter className="px-6 pb-6 pt-0">
+              <Link href="/dashboard/loading-preview" className="w-full">
+                <Button variant="outline" size="sm" className="w-full flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5" />
+                  <span>Preview Loading Screen</span>
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/app/dashboard/layout.tsx">
+"use server"
+
+import Link from "next/link";
+import Credits from "~/components/credits";
+import SignOut from "~/components/signout";
+import { Button } from "~/components/ui/button";
+import "~/styles/globals.css";
+import { ImageIcon, CreditCard, Home, GithubIcon, TwitterIcon, Mail, Heart } from "lucide-react";
+
+export default async function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-background/50 backdrop-blur-sm">
+      {/* Modern top navbar */}
+      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between px-4 md:px-6">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <ImageIcon className="h-6 w-6 text-primary" />
+            <span className="font-semibold tracking-tight">ThumbnailAI</span>
+          </Link>
+          
+          <div className="flex items-center gap-4">
+            <div className="rounded-full bg-muted px-3 py-1.5 text-sm">
+              <Credits />
+            </div>
+            <Link href="/dashboard/pricing">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <CreditCard className="h-4 w-4" />
+                Buy credits
+              </Button>
+            </Link>
+            <div className="rounded-full p-2 hover:bg-muted/80 transition-colors">
+              <SignOut />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content with subtle background pattern */}
+      <main className="flex-1 bg-grid-pattern">
+        <div 
+          className="container mx-auto px-4 py-8 md:py-12 max-w-6xl"
+          style={{
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.05) 1px, transparent 0)',
+            backgroundSize: '40px 40px'
+          }}
+        >
+          {children}
+        </div>
+      </main>
+
+      {/* Responsive footer with improved design */}
+      <footer className="border-t bg-background/90 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {/* Brand section */}
+            <div className="md:col-span-1 space-y-4">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-primary" />
+                <span className="font-semibold tracking-tight">ThumbnailAI</span>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Create professional thumbnails with AI-powered background removal in seconds.
+              </p>
+            </div>
+
+            {/* Links section */}
+            <div className="md:col-span-1">
+              <h3 className="font-medium text-sm mb-4">Quick Links</h3>
+              <nav className="flex flex-col space-y-2">
+                <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Dashboard
+                </Link>
+                <Link href="/dashboard/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Pricing
+                </Link>
+                <Link href="/dashboard/help" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Help & Support
+                </Link>
+              </nav>
+            </div>
+
+            {/* Resources section */}
+            <div className="md:col-span-1">
+              <h3 className="font-medium text-sm mb-4">Resources</h3>
+              <nav className="flex flex-col space-y-2">
+                <Link href="/dashboard/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Templates
+                </Link>
+                <Link href="/dashboard/api" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  API
+                </Link>
+                <Link href="/dashboard/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Blog
+                </Link>
+              </nav>
+            </div>
+
+            {/* Social section */}
+            <div className="md:col-span-1">
+              <h3 className="font-medium text-sm mb-4">Connect</h3>
+              <div className="flex items-center space-x-3">
+                <a href="#" className="p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors" aria-label="Twitter">
+                  <TwitterIcon className="h-4 w-4" />
+                </a>
+                <a href="#" className="p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors" aria-label="GitHub">
+                  <GithubIcon className="h-4 w-4" />
+                </a>
+                <a href="#" className="p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors" aria-label="Email">
+                  <Mail className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 pt-6 border-t border-border/40 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span>© {new Date().getFullYear()} ThumbnailAI. All rights reserved.</span>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <Link href="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Terms
+              </Link>
+              <Link href="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Privacy
+              </Link>
+              <Link href="/cookies" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Cookies
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>Made with</span>
+              <Heart className="h-3 w-3 text-red-500 fill-red-500" />
+              <span>by ThumbnailAI Team</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+</file>
+
+<file path="src/app/dashboard/loading-preview/page.tsx">
+"use client";
+
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import LoadingScreen from "~/components/LoadingScreen";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "~/components/ui/card";
+import { ArrowLeft, Play, RefreshCw } from "lucide-react";
+import Link from "next/link";
+
+export default function LoadingPreviewPage() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("Processing your image...");
+  
+  const toggleLoading = () => {
+    setIsLoading(!isLoading);
+    
+    // If starting loading, set a timeout to automatically stop after 5 seconds
+    if (!isLoading) {
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
+    }
+  };
+  
+  const messages = [
+    "Processing your image...",
+    "Removing background...",
+    "Analyzing image details...",
+    "Applying AI enhancements...",
+    "Generating your thumbnail..."
+  ];
+  
+  const changeMessage = () => {
+    const currentIndex = messages.indexOf(message);
+    const nextIndex = (currentIndex + 1) % messages.length;
+    // Use type assertion to tell TypeScript this is definitely a string
+    setMessage(messages[nextIndex] as string);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight">Loading Screen Preview</h1>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          {isLoading ? (
+            <LoadingScreen message={message} />
+          ) : (
+            <Card className="border-dashed border-2 border-border/50 bg-background/50 flex items-center justify-center p-20">
+              <div className="text-center space-y-3">
+                <RefreshCw className="h-10 w-10 text-muted-foreground mx-auto animate-pulse" />
+                <p className="text-muted-foreground">Click "Toggle Loading" to preview the loading state</p>
+              </div>
+            </Card>
+          )}
+        </div>
+        
+        <div className="lg:col-span-1 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Loading Screen Controls</CardTitle>
+              <CardDescription>Test the loading screen component with different settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-2">Current Message</label>
+                <div className="p-3 rounded-md bg-muted/30 text-sm">
+                  {message}
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-3">
+              <Button 
+                className="w-full" 
+                onClick={toggleLoading}
+                variant={isLoading ? "destructive" : "default"}
+              >
+                {isLoading ? "Stop Loading" : "Toggle Loading"}
+              </Button>
+              <Button 
+                className="w-full" 
+                variant="outline" 
+                onClick={changeMessage}
+              >
+                Change Message
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">About This Component</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                This loading screen is designed to provide visual feedback while the AI is processing
+                your images. It includes a skeleton loader, shimmer effect, and animated progress indicators.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/app/dashboard/page.tsx">
+import { ImageIcon, CreditCard } from "lucide-react";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
+import DashboardClient from "./DashboardClient";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
+
+const Page = async () => {
+    const serverSession = await auth();
+    const user = await db.user.findUnique({
+        where: {
+            id: serverSession?.user.id
+        },
+        select: {
+            credits: true,
+            name: true,
+            email: true,
+        },
+    });
+
+    // Handle case when user is out of credits
+    if (user?.credits === 0) {
+        return (
+            <div className="mx-auto max-w-md space-y-8 py-10">
+                <Card className="overflow-hidden border-none bg-background/80 backdrop-blur-lg shadow-lg">
+                    <CardHeader className="space-y-2 pb-4">
+                        <CardTitle className="text-2xl">No Credits Left</CardTitle>
+                        <CardDescription>
+                            You need credits to generate thumbnails with AI background removal.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4">
+                        <div className="rounded-lg border bg-muted/50 p-3">
+                            <div className="flex items-center justify-between">
+                                <div className="font-semibold">Current Credits</div>
+                                <div className="text-destructive font-bold">0</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <ImageIcon className="h-4 w-4" />
+                            <span>Each thumbnail creation costs 1 credit</span>
+                        </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Link href="/dashboard/pricing" className="w-full">
+                            <Button size="lg" className="w-full gap-2">
+                                <CreditCard className="h-4 w-4" />
+                                Get More Credits
+                            </Button>
+                        </Link>
+                    </CardFooter>
+                </Card>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full">
+            <DashboardClient />
+        </div>
+    );
+};
+
+export default Page;
+</file>
+
+<file path="src/app/fonts.ts">
+import { Inter, Domine } from 'next/font/google';
+
+export const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+export const domine = Domine({
+  subsets: ['latin'],
+  display: 'swap',
+});
+</file>
+
+<file path="src/app/globals.css">
+@import "tailwindcss/preflight";
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+  background-color: black;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-pulse-subtle {
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+@keyframes progress {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.animate-progress {
+  animation: progress 2s infinite;
+}
+
+@keyframes clip-rotate {
+  0% {
+    clip-path: polygon(0 0, 50% 0, 50% 50%, 0 50%);
+  }
+  25% {
+    clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
+  }
+  50% {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+  75% {
+    clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+  }
+  100% {
+    clip-path: polygon(0 0, 50% 0, 50% 50%, 0 50%);
+  }
+}
+
+/* Shimmer animation for loading skeletons */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Faster shimmer animation for internal elements */
+@keyframes shimmer-fast {
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(150%);
+  }
+}
+
+.animate-shimmer-fast {
+  animation: shimmer-fast 1.5s ease-in-out infinite;
+}
+
+/* Checkerboard pattern for transparent background */
+.bg-checkerboard {
+  background-color: white;
+  background-image: 
+    linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+    linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+    linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+</file>
+
+<file path="src/app/layout.tsx">
+import "~/styles/globals.css";
+
+import { type Metadata } from "next";
+import { Geist } from "next/font/google";
+import { Toaster } from "~/components/ui/sonner";
+import { SessionProvider } from "~/components/SessionProvider";
+
+export const metadata: Metadata = {
+  title: "Create T3 App",
+  description: "Generated by create-t3-app",
+  icons: [{ rel: "icon", url: "/favicon.ico" }],
+};
+
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+});
+
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en" className={`${geist.variable}`}>
+      <body>
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+        <Toaster 
+          expand={true}
+          richColors={true}
+          closeButton={true}
+        />
+      </body>
+    </html>
+  );
+}
+</file>
+
+<file path="src/app/page.tsx">
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
+
+export default function HomePage() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+      <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
+        <div >
+          <Button className="pointer-hover"variant={"ghost"}>Click me</Button>
+        </div>
+        <h1 className="text-5xl font-extrabold tracking-tight text-white sm:text-[5rem]">
+          Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
+        </h1>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
+          <Link
+            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
+            href="https://create.t3.gg/en/usage/first-steps"
+            target="_blank"
+          >
+            <h3 className="text-2xl font-bold">First Steps →</h3>
+            <div className="text-lg">
+              Just the basics - Everything you need to know to set up your
+              database and authentication.
+            </div>
+          </Link>
+          <Link
+            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
+            href="https://create.t3.gg/en/introduction"
+            target="_blank"
+          >
+            <h3 className="text-2xl font-bold">Documentation →</h3>
+            <div className="text-lg">
+              Learn more about Create T3 App, the libraries it uses, and how to
+              deploy it.
+            </div>
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="src/app/signin/page.tsx">
+import { redirect } from "next/navigation";
+import SignIn from "~/components/ui/signin";
+import { auth } from "~/server/auth";
+
+export const metadata = {
+  title: "Sign In",
+  description: "Sign in to your account",
+}
+
+export default async function SignInPage() {
+  const session = await auth();
+
+  // Redirect to dashboard if user is already logged in
+  if (session?.user) {
+    redirect("/dashboard");
+  }
+
+  return (
+    <div className="container mx-auto py-10">
+      <SignIn />
+    </div>
+  );
+}
+</file>
+
+<file path="src/app/signup/page.tsx">
+import { redirect } from "next/navigation";
+import SignUp from "~/components/ui/signup";
+import { auth } from "~/server/auth";
+
+export const metadata = {
+  title: "Sign Up",
+  description: "Sign up for an account",
+}
+
+export default async function SignUpPage() {
+  const session = await auth();
+
+  // Redirect to dashboard if user is already logged in
+  if (session?.user) {
+    redirect("/dashboard");
+  }
+
+  return (
+    <div className="container mx-auto py-10">
+      <SignUp />
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/credits.tsx">
+"use server"
+
+import { CreditCard } from "lucide-react"
+import { auth } from "~/server/auth"
+import { db } from "~/server/db"
+
+const Credits = async () => {
+    try {
+        const session = await auth()
+        
+        if (!session?.user?.email) {
+            return <span className="flex items-center text-muted-foreground text-sm">Sign in to view credits</span>
+        }
+        
+        // Get the full user record to ensure we get all fields
+        const user = await db.user.findUnique({
+            where: {
+                email: session.user.email
+            }
+        });
+            
+        if (!user) {
+            console.error("User not found for email:", session.user.email)
+            return <span className="text-sm text-destructive">User not found</span>
+        }
+        
+        // Show different styles based on credit amount
+        const creditsLeft = user.credits;
+        const getColorClass = () => {
+            if (creditsLeft <= 0) return "text-destructive";
+            if (creditsLeft <= 2) return "text-amber-500";
+            return "text-emerald-500";
+        };
+        
+        // Access the credits field directly from the user object
+        return (
+            <span className="flex items-center gap-1.5">
+                <CreditCard className={`h-3.5 w-3.5 ${getColorClass()}`} />
+                <span className={`${getColorClass()} font-medium`}>
+                    {creditsLeft} {creditsLeft === 1 ? 'credit' : 'credits'}
+                </span>
+            </span>
+        );
+    } catch (error) {
+        console.error("Error in Credits component:", error)
+        return <span className="text-sm text-destructive">Error loading credits</span>
+    }
+};
+
+export default Credits;
+</file>
+
+<file path="src/components/dropzone.tsx">
+"use client";
+
+import React, { useRef, useState } from "react";
+import { ImageIcon, UploadCloud } from "lucide-react";
+
+interface DropzoneProps {
+  onFileAccepted?: (file: File) => void;
+  setSelectedImage?: (file: File) => Promise<void>;
+}
+
+const Dropzone: React.FC<DropzoneProps> = ({ onFileAccepted, setSelectedImage }) => {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (files: FileList | null) => {
+    if (files && files[0]) {
+      const file = files[0];
+      if (file.type.startsWith("image/")) {
+        setPreview(URL.createObjectURL(file));
+        onFileAccepted?.(file);
+        setSelectedImage?.(file);
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(e.target.files);
+  };
+
+  return (
+    <div
+      className={`
+        border-2 
+        border-dashed 
+        rounded-xl 
+        p-8 
+        flex 
+        flex-col 
+        items-center 
+        justify-center 
+        transition-all 
+        duration-300
+        cursor-pointer 
+        relative 
+        bg-muted/20 
+        hover:bg-muted/30
+        ${dragActive ? "border-primary bg-primary/10 scale-[1.01]" : "border-border/50 dark:border-border/30"}
+      `}
+      onClick={() => inputRef.current?.click()}
+      onDragOver={e => {
+        e.preventDefault();
+        setDragActive(true);
+      }}
+      onDragLeave={e => {
+        e.preventDefault();
+        setDragActive(false);
+      }}
+      onDrop={handleDrop}
+      style={{ minHeight: 200 }}
+    >
+      {preview ? (
+        <div className="relative flex flex-col items-center gap-3">
+          <div className="relative rounded-md overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
+            <img
+              src={preview}
+              alt="Preview"
+              className="max-h-44 object-contain"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
+          </div>
+          <p className="text-xs text-muted-foreground">Image ready for processing</p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 text-muted-foreground max-w-xs text-center">
+          <div className={`rounded-full p-3 bg-primary/10 transition-all duration-300 ${dragActive ? "scale-110" : ""}`}>
+            <UploadCloud className={`w-8 h-8 text-primary transition-all duration-300 ${dragActive ? "scale-110" : ""}`} />
+          </div>
+          <span className="font-medium">Drop your image here</span>
+          <span className="text-xs text-muted-foreground">or click to browse</span>
+          <span className="text-[10px] text-muted-foreground mt-2">PNG, JPG, JPEG, or GIF (max 5MB)</span>
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleChange}
+      />
+    </div>
+  );
+};
+
+export default Dropzone;
+</file>
+
+<file path="src/components/LoadingScreen.tsx">
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Loader2, SparklesIcon, ImageIcon, Zap, Wand2 } from "lucide-react";
+
+interface LoadingScreenProps {
+  message?: string;
+}
+
+const LoadingScreen: React.FC<LoadingScreenProps> = ({ 
+  message = "Processing your image..." 
+}) => {
+  const [dots, setDots] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [activeIcon, setActiveIcon] = useState(0);
+  
+  // Animate the loading dots
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? "" : prev + ".");
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Simulate progress movement
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        const next = prev + (Math.random() * 5);
+        return next > 95 ? 95 : next;
+      });
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Cycle through the icons
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIcon(prev => (prev + 1) % 4);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Icons for the loading animation
+  const loadingIcons = [
+    <ImageIcon key="image" className="text-primary h-5 w-5" />,
+    <Wand2 key="wand" className="text-primary h-5 w-5" />,
+    <Zap key="zap" className="text-primary h-5 w-5" />,
+    <SparklesIcon key="sparkles" className="text-primary h-5 w-5" />
+  ];
+
+  return (
+    <div className="w-full py-12 flex flex-col items-center justify-center">
+      <div className="max-w-md w-full mx-auto">
+        {/* Main loading container */}
+        <div 
+          className="relative overflow-hidden border border-border/40 rounded-lg shadow-lg bg-gradient-to-b from-background/90 to-background/50 backdrop-blur-md"
+          style={{
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.05) inset"
+          }}
+        >
+          {/* Animated background elements */}
+          <div className="absolute inset-0 opacity-10 overflow-hidden">
+            <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-primary/30 blur-3xl animate-pulse-subtle" 
+              style={{ animationDuration: "7s" }} />
+            <div className="absolute -bottom-20 -right-10 w-60 h-60 rounded-full bg-primary/20 blur-3xl animate-pulse-subtle" 
+              style={{ animationDuration: "8s", animationDelay: "1s" }} />
+          </div>
+          
+          {/* Shimmering skeleton */}
+          <div className="aspect-video w-full bg-transparent relative overflow-hidden">
+            {/* Gradient overlay */}
+            <div 
+              className="absolute inset-0" 
+              style={{
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent)",
+                animation: "shimmer 2s infinite",
+                backgroundSize: "200% 100%",
+              }}
+            />
+            
+            {/* Skeleton shapes with improved animation */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
+              <div className="w-1/2 h-1/3 rounded-lg bg-muted/20 mb-6 relative overflow-hidden backdrop-blur-sm">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer-fast" />
+              </div>
+              <div className="w-3/4 h-8 rounded-md bg-muted/15 mb-4 relative overflow-hidden backdrop-blur-sm">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer-fast" style={{ animationDelay: "0.2s" }} />
+              </div>
+              <div className="w-1/2 h-6 rounded-md bg-muted/15 relative overflow-hidden backdrop-blur-sm">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer-fast" style={{ animationDelay: "0.4s" }} />
+              </div>
+            </div>
+          </div>
+          
+          {/* Loading indicator overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/10 backdrop-blur-[3px]">
+            <div className="relative flex flex-col items-center gap-4">
+              {/* Illuminated spinner */}
+              <div className="relative w-16 h-16">
+                {/* Glowing backdrop */}
+                <div className="absolute inset-[25%] bg-primary/20 blur-xl rounded-full animate-pulse-subtle" style={{ animationDuration: "2s" }} />
+                
+                {/* Spinner elements */}
+                <Loader2 className="w-16 h-16 animate-spin text-primary/20" />
+                <Loader2 
+                  className="w-16 h-16 animate-spin text-primary absolute inset-0" 
+                  style={{ 
+                    clipPath: 'polygon(0 0, 50% 0, 50% 50%, 0 50%)',
+                    animation: 'spin 1s linear infinite, clip-rotate 2s ease-in-out infinite',
+                    filter: 'drop-shadow(0 0 3px rgba(var(--primary), 0.5))'
+                  }} 
+                />
+                
+                {/* Center dot */}
+                <div className="absolute inset-[42%] rounded-full bg-primary animate-pulse" />
+              </div>
+              
+              <div className="text-center px-6 py-2 rounded-full bg-black/10 backdrop-blur-sm border border-white/5">
+                <p className="text-sm font-medium flex items-center gap-2 justify-center">
+                  {loadingIcons[activeIcon]}
+                  <span>{message}{dots}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">AI magic in progress</p>
+              </div>
+              
+              {/* Enhanced progress bar */}
+              <div className="w-full max-w-xs mt-3">
+                <div className="h-1 bg-muted/30 rounded-full overflow-hidden backdrop-blur-sm">
+                  <div 
+                    className="h-full bg-gradient-to-r from-primary/60 to-primary rounded-full"
+                    style={{ 
+                      width: `${progress}%`, 
+                      transition: 'width 0.3s ease-out',
+                      boxShadow: '0 0 8px rgba(var(--primary), 0.5)'
+                    }} 
+                  />
+                </div>
+                <div className="flex justify-between mt-1.5 px-1">
+                  <span className="text-[10px] text-muted-foreground">{Math.round(progress)}% complete</span>
+                  <span className="text-[10px] text-muted-foreground">Optimizing results</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Enhanced helpful tips */}
+        <div className="mt-8 text-center relative">
+          <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center">
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-md rounded-full border border-border/20 shadow-md"></div>
+            <SparklesIcon className="h-5 w-5 text-primary relative animate-pulse-subtle" style={{ animationDuration: "3s" }} />
+          </div>
+          
+          <div className="pt-6 p-4 bg-black/5 backdrop-blur-sm rounded-lg border border-white/5">
+            <h3 className="text-xs font-medium mb-2">While You Wait</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Our AI is carefully analyzing your image, removing the background,
+              and preparing it for the perfect thumbnail composition.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LoadingScreen;
+</file>
+
+<file path="src/components/SessionProvider.tsx">
+"use client";
+
+import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
+
+export function SessionProvider({ children }: { children: React.ReactNode }) {
+  return <NextAuthSessionProvider>{children}</NextAuthSessionProvider>;
+}
+</file>
+
+<file path="src/components/signout.tsx">
+"use client"
+
+import { signOut } from "next-auth/react";
+import { LogOut } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+
+const SignOut = () => {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button 
+            onClick={() => signOut()} 
+            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-muted"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Sign out</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+export default SignOut;
+</file>
+
+<file path="src/components/style.tsx">
+"use client"
+
+import { useState } from "react";
+import { Check } from "lucide-react";
+
+const Style = ({
+    image,
+    selectStyle, 
+    isSelected
+} : {
+    image: string;
+    selectStyle: () => void;
+    isSelected: boolean;
+}) => {
+    const [mouseOver, setMouseOver] = useState(false);
+
+    return (
+        <div
+            onMouseEnter={() => setMouseOver(true)}
+            onMouseLeave={() => setMouseOver(false)}
+            onClick={selectStyle}
+            className={`
+                group
+                relative
+                aspect-video
+                w-full
+                max-w-[260px]
+                cursor-pointer 
+                overflow-hidden
+                rounded-xl 
+                transition-all
+                duration-300
+                ${mouseOver ? "transform-gpu translate-y-[-4px] shadow-lg" : "shadow-sm"} 
+                ${isSelected ? "ring-2 ring-primary" : ""}
+                after:absolute
+                after:inset-0
+                after:z-10
+                after:transition-all
+                after:duration-300
+                ${isSelected ? "after:bg-gradient-to-tr after:from-primary/10 after:to-transparent" : "after:opacity-0 after:bg-gradient-to-tr after:from-black/30 after:to-transparent after:group-hover:opacity-100"}
+            `}
+            style={{
+                transform: mouseOver 
+                    ? "perspective(1000px) rotateX(1.5deg)" 
+                    : isSelected 
+                        ? "perspective(1000px) rotateY(-0.5deg)" 
+                        : "none"
+            }}
+        >
+            {/* Background image */}
+            <img
+                className={`
+                    w-full
+                    h-full
+                    object-cover
+                    transition-all
+                    duration-300
+                    ${mouseOver ? "scale-[1.03] filter brightness-[1.03]" : ""}
+                    ${isSelected ? "scale-[1.01] filter contrast-[1.03]" : ""}
+                `}
+                src={image}
+                alt="style preview"
+            />
+            
+            {/* Selection indicator */}
+            {isSelected && (
+                <div className="absolute top-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white shadow-md z-20">
+                    <Check className="h-3 w-3" />
+                </div>
+            )}
+            
+            {/* Hover content */}
+            <div className="absolute inset-0 z-20 flex flex-col justify-between p-3 transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+                <div className="flex justify-end">
+                    <span className="rounded-full bg-white/90 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-gray-800 shadow-sm">
+                        Template
+                    </span>
+                </div>
+                <div className="flex items-end justify-center">
+                    <div className="w-full rounded-md bg-black/40 p-2 backdrop-blur-sm">
+                        <p className="text-center text-xs font-medium text-white">
+                            {isSelected ? "Selected" : "Click to Select"}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default Style;
+</file>
+
+<file path="src/components/thumbnail-creator.tsx">
+"use client"
+
+import { useEffect, useRef, useState } from "react";
+import Dropzone from "./dropzone";
+import Style from "./style";
+import { removeBackground } from "@imgly/background-removal";
+import { Button } from "./ui/button";
+import { IoMdArrowBack } from "react-icons/io";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import { Label } from "./ui/label";
+import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { inter, domine } from "../app/fonts";
+import { generate, refresh } from "~/app/actions/generate";
+import {  Type, Image as LucideImage, Sliders } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Slider } from "~/components/ui/slider";
+import LoadingScreen from "./LoadingScreen";
+
+const presets = {
+  style1: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(255, 255, 255, 1)",
+    opacity: 1,
+  },
+  style2: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(0, 0, 0, 1)",
+    opacity: 1,
+  },
+  style3: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(255, 255, 255, 0.8)",
+    opacity: 0.8,
+  },
+};
+
+// Image filter presets
+const imageFilters = {
+  none: { name: "None", filter: "" },
+  grayscale: { name: "B&W", filter: "grayscale(100%)" },
+  sepia: { name: "Sepia", filter: "sepia(100%)" },
+  invert: { name: "Invert", filter: "invert(100%)" },
+  contrast: { name: "High Contrast", filter: "contrast(150%)" },
+  brightness: { name: "Bright", filter: "brightness(130%)" },
+  blur: { name: "Soft Focus", filter: "blur(2px)" },
+  saturate: { name: "Vibrant", filter: "saturate(200%)" },
+};
+
+const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
+  const [selectedStyle, setSelectedStyle] = useState("style1");
+  const [loading, setLoading] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [processedImageSrc, setProcessedImageSrc] = useState<string | null>(
+    null,
+  );
+  const [canvasReady, setCanvasReady] = useState(false);
+  const [text, setText] = useState("POV");
+  const [font, setFont] = useState("arial");
+  const [image, setImage] = useState<File | null>(null);
+  
+  // Advanced text effects states
+  const [textShadow, setTextShadow] = useState(false);
+  const [shadowBlur, setShadowBlur] = useState(5);
+  const [shadowColor, setShadowColor] = useState("rgba(0, 0, 0, 0.7)");
+  const [textOutline, setTextOutline] = useState(false);
+  const [outlineWidth, setOutlineWidth] = useState(2);
+  const [outlineColor, setOutlineColor] = useState("#000000");
+  const [useGradient, setUseGradient] = useState(false);
+  const [gradientColor1, setGradientColor1] = useState("#ff0000");
+  const [gradientColor2, setGradientColor2] = useState("#0000ff");
+  
+  // Image filter states
+  const [selectedFilter, setSelectedFilter] = useState("none");
+  const [filterIntensity, setFilterIntensity] = useState(100);
+  const [filterBrightness, setFilterBrightness] = useState(100);
+  const [filterContrast, setFilterContrast] = useState(100);
+  const [filterSaturation, setFilterSaturation] = useState(100);
+
+  const setSelectedImage = async (file?: File) => {
+    if (file) {
+      setLoading(true);
+      setImage(file);
+      
+      try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const src = e.target?.result as string;
+          setImageSrc(src);
+
+          try {
+            const blob = await removeBackground(src);
+            const processedUrl = URL.createObjectURL(blob);
+            setProcessedImageSrc(processedUrl);
+            setCanvasReady(true);
+          } catch (error) {
+            console.error("Error removing background:", error);
+          } finally {
+            setLoading(false);
+          }
+        };
+        reader.readAsDataURL(file);
+        await generate();
+      } catch (error) {
+        console.error("Error processing image:", error);
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (canvasReady && imageSrc && processedImageSrc) {
+      drawCompositeImage();
+    }
+  }, [
+    canvasReady, 
+    text, 
+    font, 
+    selectedStyle, 
+    imageSrc, 
+    processedImageSrc, 
+    textShadow, 
+    shadowBlur, 
+    shadowColor, 
+    textOutline, 
+    outlineWidth, 
+    outlineColor, 
+    useGradient,
+    gradientColor1,
+    gradientColor2,
+    selectedFilter,
+    filterIntensity,
+    filterBrightness, 
+    filterContrast, 
+    filterSaturation
+  ]);
+
+  const drawCompositeImage = () => {
+    if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc)
+      return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const bgImg = new window.Image();
+    
+    bgImg.onload = () => {
+      canvas.width = bgImg.width;
+      canvas.height = bgImg.height;
+
+      // Apply image filters to background
+      ctx.filter = getCompositeFilter();
+      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+      ctx.filter = "none"; // Reset filter for text and foreground
+
+      let preset = presets.style1;
+      switch (selectedStyle) {
+        case "style2":
+          preset = presets.style2;
+          break;
+        case "style3":
+          preset = presets.style3;
+          break;
+      }
+
+      ctx.save();
+
+      // Calculate font size to fill image 90% of the canvas
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      let fontSize = 100;
+      let selectFont = "arial";
+      switch (font) {
+        case "inter":
+          selectFont = inter.style.fontFamily;
+          break;
+        case "domine":
+          selectFont = domine.style.fontFamily;
+          break;
+      }
+      ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
+      const textWidth = ctx.measureText(text).width;
+      const targetWidth = canvas.width * 0.9;
+
+      fontSize *= targetWidth / textWidth;
+      ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
+      
+      const x = canvas.width / 2;
+      const y = canvas.height / 2;
+      
+      ctx.translate(x, y);
+
+      // Apply text shadow if enabled
+      if (textShadow) {
+        ctx.shadowColor = shadowColor;
+        ctx.shadowBlur = shadowBlur;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      }
+      
+      // Draw text outline if enabled
+      if (textOutline) {
+        ctx.lineWidth = outlineWidth;
+        ctx.strokeStyle = outlineColor;
+        ctx.strokeText(text, 0, 0);
+      }
+      
+      // Apply gradient fill if enabled
+      if (useGradient) {
+        const gradient = ctx.createLinearGradient(
+          -textWidth / 2, 
+          -fontSize / 2, 
+          textWidth / 2, 
+          fontSize / 2
+        );
+        gradient.addColorStop(0, gradientColor1);
+        gradient.addColorStop(1, gradientColor2);
+        ctx.fillStyle = gradient;
+      } else {
+        ctx.fillStyle = preset.color;
+      }
+      
+      ctx.globalAlpha = preset.opacity;
+      ctx.fillText(text, 0, 0);
+      
+      // Reset shadow
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      ctx.restore();
+
+      // Draw the foreground image (with no filter)
+      const fgImg = new window.Image();
+      fgImg.onload = () => {
+        ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
+      };
+
+      fgImg.src = processedImageSrc;
+    };
+
+    bgImg.src = imageSrc;
+  };
+  
+  // Generate composite CSS filter string based on current settings
+  const getCompositeFilter = () => {
+    const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
+    const intensity = filterIntensity / 100;
+    
+    let compositeFilter = "";
+    
+    // Base filter if selected
+    if (filter.filter && filter.filter !== "none") {
+      compositeFilter = filter.filter;
+    }
+    
+    // Add adjustment filters
+    if (filterBrightness !== 100) {
+      compositeFilter += ` brightness(${filterBrightness}%)`;
+    }
+    
+    if (filterContrast !== 100) {
+      compositeFilter += ` contrast(${filterContrast}%)`;
+    }
+    
+    if (filterSaturation !== 100) {
+      compositeFilter += ` saturate(${filterSaturation}%)`;
+    }
+    
+    return compositeFilter;
+  };
+
+  const handleDownload = () => {
+    if (canvasRef.current) {
+      const link = document.createElement("a");
+      link.download = "thumbnail.png";
+      link.href = canvasRef.current.toDataURL();
+      link.click();
+    }
+  };
+
+  return (
+    <>
+      {imageSrc ? (
+        <>
+          {loading ? (
+            <LoadingScreen message="Removing background..." />
+          ) : (
+            <div className="flex w-full max-w-3xl flex-col items-center gap-6">
+              <div className="relative w-full">
+                <button
+                  onClick={async () => {
+                    setImageSrc(null);
+                    setProcessedImageSrc(null);
+                    setCanvasReady(false);
+                    setImage(null);
+                    await refresh();
+                  }}
+                  className="absolute -top-2 -left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 backdrop-blur-sm hover:bg-muted transition-colors shadow-sm"
+                >
+                  <IoMdArrowBack className="h-4 w-4 text-foreground" />
+                </button>
+                
+                <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard">
+                  <canvas
+                    ref={canvasRef}
+                    className="h-auto w-full max-w-full"
+                  ></canvas>
+                </div>
+              </div>
+              
+              <Card className="w-full border-none shadow-md bg-background/80 backdrop-blur-sm">
+                <CardHeader className="pb-3 px-5">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2">
+                    <Sliders className="h-4 w-4 text-primary" />
+                    Edit Thumbnail
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-5">
+                  <Tabs defaultValue="text" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 mb-4">
+                      <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
+                        <Type className="h-3.5 w-3.5" />
+                        <span>Text</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="effects" className="flex items-center gap-1.5 text-xs">
+                        <Type className="h-3.5 w-3.5" />
+                        <span>Text Effects</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="filters" className="flex items-center gap-1.5 text-xs">
+                        <LucideImage className="h-3.5 w-3.5" />
+                        <span>Image Filters</span>
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    {/* Basic Text Tab */}
+                    <TabsContent value="text" className="space-y-5">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
+                        <Input
+                          value={text}
+                          onChange={(e) => setText(e.target.value)}
+                          id="text"
+                          placeholder="Enter text for your thumbnail"
+                          className="h-10"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
+                        <Select
+                          value={font}
+                          onValueChange={(value) => setFont(value)}
+                        >
+                          <SelectTrigger id="font" className="h-10 w-full">
+                            <SelectValue placeholder="Select a font" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            <SelectItem value="arial">Arial</SelectItem>
+                            <SelectItem value="inter">Inter</SelectItem>
+                            <SelectItem value="domine">Domine</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TabsContent>
+                    
+                    {/* Text Effects Tab */}
+                    <TabsContent value="effects" className="space-y-4 mt-4">
+                      {/* Text Shadow Controls */}
+                      <div className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="shadow-toggle" className="font-medium">Text Shadow</Label>
+                          <input 
+                            type="checkbox" 
+                            id="shadow-toggle"
+                            checked={textShadow}
+                            onChange={(e) => setTextShadow(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </div>
+                        
+                        {textShadow && (
+                          <div className="mt-3 space-y-3">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label htmlFor="shadow-blur" className="text-sm">Blur</Label>
+                                <span className="text-xs text-muted-foreground">{shadowBlur}px</span>
+                              </div>
+                              <Slider 
+                                id="shadow-blur"
+                                min={0} 
+                                max={20} 
+                                step={1}
+                                value={[shadowBlur]}
+                                onValueChange={(value: number[]) => {
+                                  if (value[0] !== undefined) {
+                                    setShadowBlur(value[0]);
+                                  }
+                                }}
+                              />
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <Label htmlFor="shadow-color" className="text-sm">Shadow Color</Label>
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="h-5 w-5 rounded-full border" 
+                                  style={{ backgroundColor: shadowColor }}
+                                />
+                                <Input
+                                  id="shadow-color"
+                                  type="text"
+                                  value={shadowColor}
+                                  onChange={(e) => setShadowColor(e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Text Outline Controls */}
+                      <div className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="outline-toggle" className="font-medium">Text Outline</Label>
+                          <input 
+                            type="checkbox" 
+                            id="outline-toggle"
+                            checked={textOutline}
+                            onChange={(e) => setTextOutline(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </div>
+                        
+                        {textOutline && (
+                          <div className="mt-3 space-y-3">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label htmlFor="outline-width" className="text-sm">Width</Label>
+                                <span className="text-xs text-muted-foreground">{outlineWidth}px</span>
+                              </div>
+                              <Slider 
+                                id="outline-width"
+                                min={1} 
+                                max={10} 
+                                step={1}
+                                value={[outlineWidth]}
+                                onValueChange={(value: number[]) => {
+                                  if (value[0] !== undefined) {
+                                    setOutlineWidth(value[0]);
+                                  }
+                                }}
+                              />
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <Label htmlFor="outline-color" className="text-sm">Outline Color</Label>
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="h-5 w-5 rounded-full border" 
+                                  style={{ backgroundColor: outlineColor }}
+                                />
+                                <Input
+                                  id="outline-color"
+                                  type="text"
+                                  value={outlineColor}
+                                  onChange={(e) => setOutlineColor(e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Text Gradient Controls */}
+                      <div className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
+                          <input 
+                            type="checkbox" 
+                            id="gradient-toggle"
+                            checked={useGradient}
+                            onChange={(e) => setUseGradient(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </div>
+                        
+                        {useGradient && (
+                          <div className="mt-3 space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label htmlFor="gradient-color-1" className="text-sm">Color 1</Label>
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="h-5 w-5 rounded-full border" 
+                                    style={{ backgroundColor: gradientColor1 }}
+                                  />
+                                  <Input
+                                    id="gradient-color-1"
+                                    type="text"
+                                    value={gradientColor1}
+                                    onChange={(e) => setGradientColor1(e.target.value)}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor="gradient-color-2" className="text-sm">Color 2</Label>
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="h-5 w-5 rounded-full border" 
+                                    style={{ backgroundColor: gradientColor2 }}
+                                  />
+                                  <Input
+                                    id="gradient-color-2"
+                                    type="text"
+                                    value={gradientColor2}
+                                    onChange={(e) => setGradientColor2(e.target.value)}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="h-4 w-full rounded-md" style={{ 
+                              background: `linear-gradient(to right, ${gradientColor1}, ${gradientColor2})` 
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                    
+                    {/* Image Filters Tab */}
+                    <TabsContent value="filters" className="space-y-4 mt-4">
+                      <div className="space-y-3">
+                        <Label htmlFor="filter-preset" className="font-medium">Filter Preset</Label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {Object.entries(imageFilters).map(([key, filter]) => (
+                            <button
+                              key={key}
+                              className={`p-1 rounded-md text-xs border ${selectedFilter === key ? 'border-primary ring-1 ring-primary' : 'border-border'}`}
+                              onClick={() => setSelectedFilter(key)}
+                            >
+                              {filter.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="brightness" className="text-sm">Brightness</Label>
+                          <span className="text-xs text-muted-foreground">{filterBrightness}%</span>
+                        </div>
+                        <Slider 
+                          id="brightness"
+                          min={50} 
+                          max={150} 
+                          step={1}
+                          value={[filterBrightness]}
+                          onValueChange={(value: number[]) => {
+                            if (value[0] !== undefined) {
+                              setFilterBrightness(value[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="contrast" className="text-sm">Contrast</Label>
+                          <span className="text-xs text-muted-foreground">{filterContrast}%</span>
+                        </div>
+                        <Slider 
+                          id="contrast"
+                          min={50} 
+                          max={150} 
+                          step={1}
+                          value={[filterContrast]}
+                          onValueChange={(value: number[]) => {
+                            if (value[0] !== undefined) {
+                              setFilterContrast(value[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="saturation" className="text-sm">Saturation</Label>
+                          <span className="text-xs text-muted-foreground">{filterSaturation}%</span>
+                        </div>
+                        <Slider 
+                          id="saturation"
+                          min={0} 
+                          max={200} 
+                          step={1}
+                          value={[filterSaturation]}
+                          onValueChange={(value: number[]) => {
+                            if (value[0] !== undefined) {
+                              setFilterSaturation(value[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="intensity" className="text-sm">Effect Intensity</Label>
+                          <span className="text-xs text-muted-foreground">{filterIntensity}%</span>
+                        </div>
+                        <Slider 
+                          id="intensity"
+                          min={0} 
+                          max={100} 
+                          step={1}
+                          value={[filterIntensity]}
+                          onValueChange={(value: number[]) => {
+                            if (value[0] !== undefined) {
+                              setFilterIntensity(value[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+                <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
+                  <Button 
+                    onClick={() => handleDownload()} 
+                    className="gap-1.5 bg-primary/90 hover:bg-primary"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download
+                  </Button>
+                  <Button 
+                    onClick={drawCompositeImage} 
+                    className="gap-1.5 bg-muted/80 hover:bg-muted text-foreground"
+                  >
+                    <Sliders className="h-4 w-4" />
+                    Update
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className=" flex flex-col">
+          
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold tracking-tight">Choose a Template</h2>
+              <p className="text-muted-foreground">Select a style for your thumbnail design</p>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+              <Style
+                image="/style1.png"
+                selectStyle={() => setSelectedStyle("style1")}
+                isSelected={selectedStyle === "style1"}
+              />
+              <Style
+                image="/style2.png"
+                selectStyle={() => setSelectedStyle("style2")}
+                isSelected={selectedStyle === "style2"}
+              />
+              <Style
+                image="/style3.png"
+                selectStyle={() => setSelectedStyle("style3")}
+                isSelected={selectedStyle === "style3"}
+              />
+            </div>
+          </div>
+          <div className="mt-10 space-y-4">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold tracking-tight">Upload Your Image</h2>
+              <p className="text-muted-foreground">Drag & drop or select an image to get started</p>
+            </div>
+            <Dropzone setSelectedImage={setSelectedImage} />
+          </div>
+          <div className="mt-8">{children}</div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default ThumbnailCreator;
+</file>
+
+<file path="src/components/ui/button.tsx">
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "~/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive cursor-pointer",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+        ghost:
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+  }) {
+  const Comp = asChild ? Slot : "button"
+
+  return (
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+
+export { Button, buttonVariants }
+</file>
+
+<file path="src/components/ui/card.tsx">
+import * as React from "react"
+
+import { cn } from "~/lib/utils"
+
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn(
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-title"
+      className={cn("leading-none font-semibold", className)}
+      {...props}
+    />
+  )
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn("text-muted-foreground text-sm", className)}
+      {...props}
+    />
+  )
+}
+
+function CardAction({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-action"
+      className={cn(
+        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn("px-6", className)}
+      {...props}
+    />
+  )
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
+      {...props}
+    />
+  )
+}
+
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
+}
+</file>
+
+<file path="src/components/ui/color-picker.tsx">
+"use client"
+
+import React, { useState } from "react"
+import { Popover, PopoverContent, PopoverTrigger } from "./popover"
+import { cn } from "~/lib/utils"
+
+interface ColorPickerProps {
+  color: string
+  onChange: (color: string) => void
+  className?: string
+}
+
+const predefinedColors = [
+  "#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", 
+  "#FFFF00", "#FF00FF", "#00FFFF", "#FF8800", "#8800FF",
+  "#0088FF", "#88FF00", "#FF0088", "#880000", "#008800",
+  "#000088", "#888888", "#AAAAAA", "#CCCCCC"
+]
+
+export function ColorPicker({ color, onChange, className }: ColorPickerProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "h-8 w-8 rounded-md border border-input focus:outline-none focus:ring-2 focus:ring-ring",
+            className
+          )}
+          style={{ background: color }}
+          aria-label="Pick a color"
+        ></button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3">
+        <div className="grid grid-cols-5 gap-2">
+          {predefinedColors.map((c) => (
+            <button
+              key={c}
+              className={`h-6 w-6 rounded-md border ${
+                c === color ? "ring-2 ring-primary" : ""
+              }`}
+              style={{ background: c }}
+              onClick={() => {
+                onChange(c)
+                setOpen(false)
+              }}
+            />
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-8 cursor-pointer appearance-none rounded-md border border-input bg-background"
+            style={{ background: color }}
+          />
+          <input
+            type="text"
+            value={color}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 flex-1 rounded-md border border-input px-3 py-1 text-sm"
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+</file>
+
+<file path="src/components/ui/input.tsx">
+import * as React from "react"
+
+import { cn } from "~/lib/utils"
+
+function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Input }
+</file>
+
+<file path="src/components/ui/label.tsx">
+"use client"
+
+import * as React from "react"
+import * as LabelPrimitive from "@radix-ui/react-label"
+
+import { cn } from "~/lib/utils"
+
+function Label({
+  className,
+  ...props
+}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+  return (
+    <LabelPrimitive.Root
+      data-slot="label"
+      className={cn(
+        "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Label }
+</file>
+
+<file path="src/components/ui/popover.tsx">
+"use client"
+
+import * as React from "react"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
+
+import { cn } from "~/lib/utils"
+
+const Popover = PopoverPrimitive.Root
+
+const PopoverTrigger = PopoverPrimitive.Trigger
+
+const PopoverContent = React.forwardRef<
+  React.ElementRef<typeof PopoverPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+>(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+  <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      )}
+      {...props}
+    />
+  </PopoverPrimitive.Portal>
+))
+PopoverContent.displayName = PopoverPrimitive.Content.displayName
+
+export { Popover, PopoverTrigger, PopoverContent }
+</file>
+
+<file path="src/components/ui/select.tsx">
+"use client"
+
+import * as React from "react"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
+
+import { cn } from "~/lib/utils"
+
+function Select({
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  return <SelectPrimitive.Root data-slot="select" {...props} />
+}
+
+function SelectGroup({
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Group>) {
+  return <SelectPrimitive.Group data-slot="select-group" {...props} />
+}
+
+function SelectValue({
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Value>) {
+  return <SelectPrimitive.Value data-slot="select-value" {...props} />
+}
+
+function SelectTrigger({
+  className,
+  size = "default",
+  children,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
+  size?: "sm" | "default"
+}) {
+  return (
+    <SelectPrimitive.Trigger
+      data-slot="select-trigger"
+      data-size={size}
+      className={cn(
+        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <SelectPrimitive.Icon asChild>
+        <ChevronDownIcon className="size-4 opacity-50" />
+      </SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  )
+}
+
+function SelectContent({
+  className,
+  children,
+  position = "popper",
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  return (
+    <SelectPrimitive.Portal>
+      <SelectPrimitive.Content
+        data-slot="select-content"
+        className={cn(
+          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md",
+          position === "popper" &&
+            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          className
+        )}
+        position={position}
+        {...props}
+      >
+        <SelectScrollUpButton />
+        <SelectPrimitive.Viewport
+          className={cn(
+            "p-1",
+            position === "popper" &&
+              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1"
+          )}
+        >
+          {children}
+        </SelectPrimitive.Viewport>
+        <SelectScrollDownButton />
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  )
+}
+
+function SelectLabel({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Label>) {
+  return (
+    <SelectPrimitive.Label
+      data-slot="select-label"
+      className={cn("text-muted-foreground px-2 py-1.5 text-xs", className)}
+      {...props}
+    />
+  )
+}
+
+function SelectItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+  return (
+    <SelectPrimitive.Item
+      data-slot="select-item"
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        className
+      )}
+      {...props}
+    >
+      <span className="absolute right-2 flex size-3.5 items-center justify-center">
+        <SelectPrimitive.ItemIndicator>
+          <CheckIcon className="size-4" />
+        </SelectPrimitive.ItemIndicator>
+      </span>
+      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    </SelectPrimitive.Item>
+  )
+}
+
+function SelectSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Separator>) {
+  return (
+    <SelectPrimitive.Separator
+      data-slot="select-separator"
+      className={cn("bg-border pointer-events-none -mx-1 my-1 h-px", className)}
+      {...props}
+    />
+  )
+}
+
+function SelectScrollUpButton({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {
+  return (
+    <SelectPrimitive.ScrollUpButton
+      data-slot="select-scroll-up-button"
+      className={cn(
+        "flex cursor-default items-center justify-center py-1",
+        className
+      )}
+      {...props}
+    >
+      <ChevronUpIcon className="size-4" />
+    </SelectPrimitive.ScrollUpButton>
+  )
+}
+
+function SelectScrollDownButton({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>) {
+  return (
+    <SelectPrimitive.ScrollDownButton
+      data-slot="select-scroll-down-button"
+      className={cn(
+        "flex cursor-default items-center justify-center py-1",
+        className
+      )}
+      {...props}
+    >
+      <ChevronDownIcon className="size-4" />
+    </SelectPrimitive.ScrollDownButton>
+  )
+}
+
+export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+}
+</file>
+
+<file path="src/components/ui/separator.tsx">
+"use client"
+
+import * as React from "react"
+import * as SeparatorPrimitive from "@radix-ui/react-separator"
+
+import { cn } from "~/lib/utils"
+
+function Separator({
+  className,
+  orientation = "horizontal",
+  decorative = true,
+  ...props
+}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+  return (
+    <SeparatorPrimitive.Root
+      data-slot="separator-root"
+      decorative={decorative}
+      orientation={orientation}
+      className={cn(
+        "bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Separator }
+</file>
+
+<file path="src/components/ui/signin.tsx">
+"use client";
+
+import { useForm } from "react-hook-form";
+import Link from "next/link";
+import { useState } from "react";
+import { IoMdArrowBack } from "react-icons/io";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./card";
+import { Label } from "./label";
+import { Input } from "./input";
+import { Button } from "./button";
+import { z } from "zod";
+import { signInSchema } from "~/schemas/auth";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+type FormValues = z.infer<typeof signInSchema>;
+
+const Signin = () => {
+  const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormValues>({ resolver: zodResolver(signInSchema) });
+
+  const onSubmit = async (data: FormValues) => {
+    const response = await signIn("credentials", {
+      email: data.email,
+      password: data.password,
+      callbackUrl: "/dashboard",
+      redirect: false,
+    });
+
+    if (response?.error) {
+      toast.error("Wrong user/password", {
+        description: "Could not sign in",
+      });
+    } else if (response?.ok) {
+      router.push("/dashboard");
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted">
+      <div className="flex flex-col gap-6 w-full max-w-md p-6 rounded-xl shadow-lg bg-card/80 backdrop-blur">
+        <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-2">
+          <IoMdArrowBack className="h-5 w-5" />
+          <span className="leading-7 font-medium">Go back</span>
+        </Link>
+        <Card className="w-full max-w-sm border-none shadow-none bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-2xl">Sign in</CardTitle>
+            <CardDescription>
+              Enter your email and password below to sign up.
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  {...register("email")}
+                  id="email"
+                  type="email"
+                  placeholder="mail@gmail.com"
+                />
+                {errors.email && (
+                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  {...register("password")}
+                  id="password"
+                  type="password"
+                />
+                {errors.password && (
+                  <p className="text-sm text-red-500">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-2 pt-4">
+              <Button type="submit" className="w-full">
+                Sign in
+              </Button>
+              <Link href="/signup">
+                <Button variant="link">Don&apos;t have an account?</Button>
+              </Link>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Signin;
+</file>
+
+<file path="src/components/ui/signup.tsx">
+"use client";
+
+import { useForm } from "react-hook-form";
+import Link from "next/link";
+import { useState } from "react";
+import { IoMdArrowBack } from "react-icons/io";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./card";
+import { Label } from "./label";
+import { Input } from "./input";
+import { Button } from "./button";
+import { z } from "zod";
+import { signInSchema } from "~/schemas/auth";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { signup } from "~/app/actions/auth";
+import { toast } from "sonner";
+
+type FormValues = z.infer<typeof signInSchema>;
+
+const Signup = () => {
+  const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormValues>({ resolver: zodResolver(signInSchema) });
+
+  const onSubmit = async (data: FormValues) => {
+    const error = await signup(data.email, data.password);
+
+    if (error) {
+      toast.error("Sign up failed", {
+        description: error,
+      });
+    } else {
+      toast.success("Sign up successful", {
+        description: "You can now sign in with your new account.",
+      });
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted">
+      <div className="flex flex-col gap-6 w-full max-w-md p-6 rounded-xl shadow-lg bg-card/80 backdrop-blur">
+        <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-2">
+          <IoMdArrowBack className="h-5 w-5" />
+          <span className="leading-7 font-medium">Go back</span>
+        </Link>
+        <Card className="w-full max-w-sm border-none shadow-none bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-2xl">Sign up</CardTitle>
+            <CardDescription>
+              Enter your email and a password below to sign up.
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  {...register("email")}
+                  id="email"
+                  type="email"
+                  placeholder="mail@gmail.com"
+                />
+                {errors.email && (
+                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  {...register("password")}
+                  id="password"
+                  type="password"
+                />
+                {errors.password && (
+                  <p className="text-sm text-red-500">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-2 pt-4">
+              <Button type="submit" className="w-full">
+                Sign up
+              </Button>
+              <Link href="/signin">
+                <Button variant="link">Already have an account?</Button>
+              </Link>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Signup;
+</file>
+
+<file path="src/components/ui/slider.tsx">
+"use client"
+
+import * as React from "react"
+import * as SliderPrimitive from "@radix-ui/react-slider"
+
+import { cn } from "~/lib/utils"
+
+const Slider = React.forwardRef<
+  React.ElementRef<typeof SliderPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <SliderPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex w-full touch-none select-none items-center",
+      className
+    )}
+    {...props}
+  >
+    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
+      <SliderPrimitive.Range className="absolute h-full bg-primary" />
+    </SliderPrimitive.Track>
+    {props.value?.map((value: number, index: number) => (
+      <SliderPrimitive.Thumb
+        key={index}
+        className="block h-4 w-4 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+      />
+    ))}
+  </SliderPrimitive.Root>
+))
+Slider.displayName = SliderPrimitive.Root.displayName
+
+export { Slider }
+</file>
+
+<file path="src/components/ui/sonner.tsx">
+"use client"
+
+import { useTheme } from "next-themes"
+import { Toaster as Sonner } from "sonner"
+import type { ToasterProps } from "sonner"
+
+const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = "system" } = useTheme()
+
+  return (
+    <Sonner
+      theme={theme as ToasterProps["theme"]}
+      className="toaster group"
+      toastOptions={{
+        classNames: {
+          error: "bg-destructive text-destructive-foreground border-destructive",
+          success: "bg-success text-success-foreground border-success/50",
+          info: "bg-blue-500 text-white border-blue-600",
+          warning: "bg-yellow-500 text-white border-yellow-600",
+        }
+      }}
+      style={
+        {
+          "--normal-bg": "var(--popover)",
+          "--normal-text": "var(--popover-foreground)",
+          "--normal-border": "var(--border)",
+          "--success-bg": "var(--success)",
+          "--success-text": "white",
+          "--success-border": "var(--success)",
+          "--error-bg": "var(--destructive)",
+          "--error-text": "white",
+          "--error-border": "var(--destructive)",
+        } as React.CSSProperties
+      }
+      {...props}
+    />
+  )
+}
+
+export { Toaster }
+</file>
+
+<file path="src/components/ui/tabs.tsx">
+"use client"
+
+import * as React from "react"
+import * as TabsPrimitive from "@radix-ui/react-tabs"
+
+import { cn } from "~/lib/utils"
+
+const Tabs = TabsPrimitive.Root
+
+const TabsList = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    className={cn(
+      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      className
+    )}
+    {...props}
+  />
+))
+TabsList.displayName = TabsPrimitive.List.displayName
+
+const TabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+      className
+    )}
+    {...props}
+  />
+))
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
+
+const TabsContent = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    ref={ref}
+    className={cn(
+      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      className
+    )}
+    {...props}
+  />
+))
+TabsContent.displayName = TabsPrimitive.Content.displayName
+
+export { Tabs, TabsList, TabsTrigger, TabsContent }
+</file>
+
+<file path="src/components/ui/tooltip.tsx">
+"use client"
+
+import * as React from "react"
+import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+
+import { cn } from "~/lib/utils"
+
+const TooltipProvider = TooltipPrimitive.Provider
+
+const Tooltip = TooltipPrimitive.Root
+
+const TooltipTrigger = TooltipPrimitive.Trigger
+
+const TooltipContent = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <TooltipPrimitive.Content
+    ref={ref}
+    sideOffset={sideOffset}
+    className={cn(
+      "z-50 overflow-hidden rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      className
+    )}
+    {...props}
+  />
+))
+TooltipContent.displayName = TooltipPrimitive.Content.displayName
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+</file>
+
+<file path="src/env.js">
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  /**
+   * Specify your server-side environment variables schema here. This way you can ensure the app
+   * isn't built with invalid env vars.
+   */
+  server: {
+    AUTH_SECRET:
+      process.env.NODE_ENV === "production"
+        ? z.string()
+        : z.string().optional(),
+    DATABASE_URL: z.string().url(),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+  },
+
+  /**
+   * Specify your client-side environment variables schema here. This way you can ensure the app
+   * isn't built with invalid env vars. To expose them to the client, prefix them with
+   * `NEXT_PUBLIC_`.
+   */
+  client: {
+    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+  },
+
+  /**
+   * You can't destruct `process.env` as a regular object in the Next.js edge runtimes (e.g.
+   * middlewares) or client-side so we need to destruct manually.
+   */
+  runtimeEnv: {
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    DATABASE_URL: process.env.DATABASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  },
+  /**
+   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
+   * useful for Docker builds.
+   */
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  /**
+   * Makes it so that empty strings are treated as undefined. `SOME_VAR: z.string()` and
+   * `SOME_VAR=''` will throw an error.
+   */
+  emptyStringAsUndefined: true,
+});
+</file>
+
+<file path="src/lib/utils.ts">
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+</file>
+
+<file path="src/middleware.ts">
+import { withAuth } from "next-auth/middleware";
+import { NextResponse } from "next/server";
+
+// Export middleware with better error handling
+export default withAuth(
+  function middleware(req) {
+    // Successful authentication continues to the requested page
+    return NextResponse.next();
+  },
+  {
+    pages: { signIn: "/signin" },
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+  }
+);
+
+// Protect only dashboard and subsequent routes
+export const config = { matcher: ["/dashboard/:path*"] };
+</file>
+
+<file path="src/schemas/auth.ts">
+import { z } from "zod"
+
+export const signInSchema = z.object({
+    email: z.string({required_error: "Email is required"}).min(1, "Email is required").email("Invalid email address"),
+    password: z.string({required_error: "Password is required"}).min(1, "Password is required").min(8, "Password must be at least 8 characters long").max(32, "Password must be less than 100 characters long"),
+});
+
+export const signUpSchema = z.object({
+    email: z.string({required_error: "Email is required"}).min(1, "Email is required").email("Invalid email address"),
+    password: z.string({required_error: "Password is required"}).min(1, "Password is required").min(8, "Password must be at least 8 characters long").max(32, "Password must be less than 100 characters long"),
+    confirmPassword: z.string({required_error: "Confirm Password is required"}).min(1, "Confirm Password is required"),
+}).refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"], // path of error
+});
+</file>
+
+<file path="src/server/auth/config.ts">
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import bcrypt from "bcryptjs";
+import { type DefaultSession, type SessionStrategy } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { ZodError } from "zod";
+import { signInSchema } from "~/schemas/auth";
+import type { DefaultJWT } from "next-auth/jwt";
+
+import { db } from "~/server/db";
+import { env } from "~/env.js";
+
+/**
+ * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
+ * object and keep type safety.
+ *
+ * @see https://next-auth.js.org/getting-started/typescript#module-augmentation
+ */
+declare module "next-auth" {
+  interface Session extends DefaultSession {
+    user: {
+      id: string;
+      // ...other properties
+      // role: UserRole;
+    } & DefaultSession["user"];
+  }
+
+  // interface User {
+  //   // ...other properties
+  //   // role: UserRole;
+  // }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT extends DefaultJWT {
+    id: string;
+  }
+}
+
+/**
+ * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
+ *
+ * @see https://next-auth.js.org/configuration/options
+ */
+export const authConfig = {
+  debug: process.env.NODE_ENV === "development",
+  session: {
+    strategy: "jwt" as SessionStrategy,
+  },
+  providers: [
+    Credentials({
+      credentials: {
+        email: { },
+        password: { },
+      },
+      async authorize(credentials) {
+        try {
+          const {email, password} = await signInSchema.parseAsync(credentials)
+
+          const user = await db.user.findUnique({
+            where: {
+              email: email,
+            },
+           
+          });
+
+          if (!user) {
+            throw new Error("User not found");
+          }
+
+          const validPassword = await bcrypt.compare(password, user.password);
+
+          if(!validPassword) {
+            return null;
+          }
+          return user;
+        
+        } catch(error) {
+          if(error instanceof ZodError){
+            return null;
+          }
+
+         
+        }
+
+
+        return null;
+      }
+    })
+    /**
+     * ...add more providers here.
+     *
+     * Most other providers require a bit more work than the Discord provider. For example, the
+     * GitHub provider requires you to add the `refresh_token_expires_in` field to the Account
+     * model. Refer to the NextAuth.js docs for the provider you want to use. Example:
+     *
+     * @see https://next-auth.js.org/providers/github
+     */
+  ],
+  pages: {
+    signIn: "/signin",
+  },
+  secret: env.AUTH_SECRET,
+  adapter: PrismaAdapter(db),
+  
+  callbacks: {
+    jwt({ token, user }: { token: any; user: any }) {
+      if (user) {
+        token.id = user.id as string;
+      }
+      return token;
+    },
+    session({ session, token }: { session: any; token: any }) {
+      if (token && session.user) {
+        session.user.id = token.id;
+      }
+      return session;
+    }
+  },
+};
+</file>
+
+<file path="src/server/auth/index.ts">
+import { getServerSession } from "next-auth/next";
+import { authConfig } from "./config";
+
+// NextAuth v4 compatible auth function
+const auth = async () => {
+  return await getServerSession(authConfig);
+};
+
+export { auth };
+</file>
+
+<file path="src/server/db.ts">
+import { PrismaClient } from "@prisma/client";
+
+import { env } from "~/env";
+
+const createPrismaClient = () =>
+  new PrismaClient({
+    log:
+      env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+  });
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: ReturnType<typeof createPrismaClient> | undefined;
+};
+
+export const db = globalForPrisma.prisma ?? createPrismaClient();
+
+if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+</file>
+
+<file path="src/styles/globals.css">
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "checkJs": true,
+
+    /* Bundled projects */
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }],
+    "incremental": true,
+
+    /* Path Aliases */
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.cjs",
+    "**/*.js",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
+</file>
+
+</files>

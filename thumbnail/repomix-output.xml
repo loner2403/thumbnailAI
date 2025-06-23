@@ -55,7 +55,6 @@ src/app/actions/generate.ts
 src/app/api/auth/[...nextauth]/route.ts
 src/app/dashboard/DashboardClient.tsx
 src/app/dashboard/layout.tsx
-src/app/dashboard/loading-preview/page.tsx
 src/app/dashboard/page.tsx
 src/app/fonts.ts
 src/app/globals.css
@@ -66,6 +65,7 @@ src/app/signup/page.tsx
 src/components/credits.tsx
 src/components/dropzone.tsx
 src/components/LoadingScreen.tsx
+src/components/recent.tsx
 src/components/SessionProvider.tsx
 src/components/signout.tsx
 src/components/style.tsx
@@ -308,6 +308,7 @@ export default config;
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.6",
     "react": "^19.0.0",
+    "react-best-gradient-color-picker": "^3.0.14",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.3",
     "react-icons": "^5.5.0",
@@ -545,16 +546,16 @@ export const POST = NextAuth(authConfig);
 <file path="src/app/dashboard/DashboardClient.tsx">
 "use client";
 
-import { useState } from "react";
+
 import { Card, CardContent, CardFooter } from "~/components/ui/card";
 import ThumbnailCreator from "~/components/thumbnail-creator";
 import { ImageIcon, Sparkles, Zap, Link2 } from "lucide-react";
-import Link from "next/link";
-import { Button } from "~/components/ui/button";
+import Recent from "~/components/recent";
+
 
 export default function DashboardClient() {
   return (
-    <div className="">
+    <div className="w-full min-h-screen">
       <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
         Hi there,
       </h1>
@@ -566,62 +567,12 @@ export default function DashboardClient() {
       </p>
 
       {/* Dashboard Content */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-7">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-0 w-full">
         {/* Main Content - Thumbnail Creator */}
-        <Card className="col-span-1 lg:col-span-5 border-none shadow-sm bg-background/60 backdrop-blur-sm overflow-hidden">
-          <CardContent className="p-0">
-            <ThumbnailCreator>
-              <div className="flex items-center justify-center p-8 bg-muted/20 rounded-lg">
-                <div className="flex flex-col items-center text-center space-y-3">
-                  <Sparkles className="h-10 w-10 text-primary/70" />
-                  <p className="text-muted-foreground">
-                    Your thumbnails will appear here
-                  </p>
-                </div>
-              </div>
-            </ThumbnailCreator>
-          </CardContent>
+        <Card className="col-span-1 lg:col-span-7 border-none shadow-sm bg-background/60 backdrop-blur-sm overflow-hidden w-full h-full">
+          <ThumbnailCreator />
         </Card>
-
-        {/* Sidebar */}
-        <div className="col-span-1 lg:col-span-2 space-y-6 lg:sticky lg:top-6 lg:self-start">
-          {/* Stats Card */}
-          
-
-          {/* Tips Card */}
-          <Card className="border-none shadow-sm bg-gradient-to-br from-primary/5 to-primary/10 backdrop-blur-sm overflow-hidden">
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <ImageIcon className="h-5 w-5 text-primary" />
-                  <h3 className="text-sm font-medium">Pro Tips</h3>
-                </div>
-                <ul className="space-y-3 text-sm text-muted-foreground">
-                  <li className="flex items-start space-x-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span>Use high-contrast images for best results</span>
-                  </li>
-                  <li className="flex items-start space-x-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span>Keep text short and impactful</span>
-                  </li>
-                  <li className="flex items-start space-x-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span>Try different templates for variety</span>
-                  </li>
-                </ul>
-              </div>
-            </CardContent>
-            <CardFooter className="px-6 pb-6 pt-0">
-              <Link href="/dashboard/loading-preview" className="w-full">
-                <Button variant="outline" size="sm" className="w-full flex items-center gap-1.5">
-                  <Link2 className="h-3.5 w-3.5" />
-                  <span>Preview Loading Screen</span>
-                </Button>
-              </Link>
-            </CardFooter>
-          </Card>
-        </div>
+        {/* Sidebar removed */}
       </div>
     </div>
   );
@@ -775,120 +726,6 @@ export default async function RootLayout({
 }
 </file>
 
-<file path="src/app/dashboard/loading-preview/page.tsx">
-"use client";
-
-import { useState } from "react";
-import { Button } from "~/components/ui/button";
-import LoadingScreen from "~/components/LoadingScreen";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "~/components/ui/card";
-import { ArrowLeft, Play, RefreshCw } from "lucide-react";
-import Link from "next/link";
-
-export default function LoadingPreviewPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState("Processing your image...");
-  
-  const toggleLoading = () => {
-    setIsLoading(!isLoading);
-    
-    // If starting loading, set a timeout to automatically stop after 5 seconds
-    if (!isLoading) {
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 5000);
-    }
-  };
-  
-  const messages = [
-    "Processing your image...",
-    "Removing background...",
-    "Analyzing image details...",
-    "Applying AI enhancements...",
-    "Generating your thumbnail..."
-  ];
-  
-  const changeMessage = () => {
-    const currentIndex = messages.indexOf(message);
-    const nextIndex = (currentIndex + 1) % messages.length;
-    // Use type assertion to tell TypeScript this is definitely a string
-    setMessage(messages[nextIndex] as string);
-  };
-
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Loading Screen Preview</h1>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          {isLoading ? (
-            <LoadingScreen message={message} />
-          ) : (
-            <Card className="border-dashed border-2 border-border/50 bg-background/50 flex items-center justify-center p-20">
-              <div className="text-center space-y-3">
-                <RefreshCw className="h-10 w-10 text-muted-foreground mx-auto animate-pulse" />
-                <p className="text-muted-foreground">Click "Toggle Loading" to preview the loading state</p>
-              </div>
-            </Card>
-          )}
-        </div>
-        
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Loading Screen Controls</CardTitle>
-              <CardDescription>Test the loading screen component with different settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium block mb-2">Current Message</label>
-                <div className="p-3 rounded-md bg-muted/30 text-sm">
-                  {message}
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-3">
-              <Button 
-                className="w-full" 
-                onClick={toggleLoading}
-                variant={isLoading ? "destructive" : "default"}
-              >
-                {isLoading ? "Stop Loading" : "Toggle Loading"}
-              </Button>
-              <Button 
-                className="w-full" 
-                variant="outline" 
-                onClick={changeMessage}
-              >
-                Change Message
-              </Button>
-            </CardFooter>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">About This Component</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                This loading screen is designed to provide visual feedback while the AI is processing
-                your images. It includes a skeleton loader, shimmer effect, and animated progress indicators.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
-</file>
-
 <file path="src/app/dashboard/page.tsx">
 import { ImageIcon, CreditCard } from "lucide-react";
 import Link from "next/link";
@@ -897,6 +734,7 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import DashboardClient from "./DashboardClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
+import Recent from "~/components/recent";
 
 const Page = async () => {
     const serverSession = await auth();
@@ -943,6 +781,9 @@ const Page = async () => {
                         </Link>
                     </CardFooter>
                 </Card>
+                <div className="mt-10">
+                    <Recent />
+                </div>
             </div>
         );
     }
@@ -950,6 +791,9 @@ const Page = async () => {
     return (
         <div className="w-full">
             <DashboardClient />
+            <div className="mt-10">
+                <Recent />
+            </div>
         </div>
     );
 };
@@ -1525,6 +1369,92 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
 export default LoadingScreen;
 </file>
 
+<file path="src/components/recent.tsx">
+"use server"
+
+import { Separator } from "@radix-ui/react-select";
+import { Button } from "./ui/button";
+
+const recent = () => {
+    return <div className="flex flex-col">
+        <h3 className="scroll-m-20 text-xl font-semibold tracking-tight">
+            Recent Thumbnails
+        </h3>
+        <p className="text-sm text-muted-foreground">
+            Download your most recent thumbnails.
+        </p>
+        <Separator className="my-2" />
+        <div className="flex h-fit max-w-full gap-2 overflow-x-scroll">
+            <div className="flex min-w-fit flex-col gap-1">
+                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
+                <p className="text-sm">
+                    From{" "}
+                    {new Date().toLocaleDateString("en-GB",{
+                        day: "2-digit",
+                        month:"2-digit",
+                        year: "numeric",
+                    })}
+                </p>
+                <Button className="w-full" variant="outline">
+                    Download
+                </Button>
+
+            </div>
+            <div className="flex min-w-fit flex-col gap-1">
+                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
+                <p className="text-sm">
+                    From{" "}
+                    {new Date().toLocaleDateString("en-GB",{
+                        day: "2-digit",
+                        month:"2-digit",
+                        year: "numeric",
+                    })}
+                </p>
+                <Button className="w-full" variant="outline">
+                    Download
+                </Button>
+                
+            </div>
+            <div className="flex min-w-fit flex-col gap-1">
+                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
+                <p className="text-sm">
+                    From{" "}
+                    {new Date().toLocaleDateString("en-GB",{
+                        day: "2-digit",
+                        month:"2-digit",
+                        year: "numeric",
+                    })}
+                </p>
+                <Button className="w-full" variant="outline">
+                    Download
+                </Button>
+                
+            </div>
+            <div className="flex min-w-fit flex-col gap-1">
+                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
+                <p className="text-sm">
+                    From{" "}
+                    {new Date().toLocaleDateString("en-GB",{
+                        day: "2-digit",
+                        month:"2-digit",
+                        year: "numeric",
+                    })}
+                </p>
+                <Button className="w-full" variant="outline">
+                    Download
+                </Button>
+                
+            </div>
+
+
+        </div>
+
+    </div>;
+};
+
+export default recent;
+</file>
+
 <file path="src/components/SessionProvider.tsx">
 "use client";
 
@@ -1663,7 +1593,7 @@ export default Style;
 <file path="src/components/thumbnail-creator.tsx">
 "use client"
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Dropzone from "./dropzone";
 import Style from "./style";
 import { removeBackground } from "@imgly/background-removal";
@@ -1687,7 +1617,7 @@ import {
 } from "./ui/select";
 import { inter, domine } from "../app/fonts";
 import { generate, refresh } from "~/app/actions/generate";
-import {  Type, Image as LucideImage, Sliders } from "lucide-react";
+import { Type, Image as LucideImage, Sliders } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Slider } from "~/components/ui/slider";
 import LoadingScreen from "./LoadingScreen";
@@ -1725,19 +1655,86 @@ const imageFilters = {
   saturate: { name: "Vibrant", filter: "saturate(200%)" },
 };
 
-const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
+// Gradient presets for easy selection
+const gradientPresets = [
+  { name: "Sunset", colors: ["#ff7e5f", "#feb47b"] },
+  { name: "Ocean", colors: ["#2196f3", "#21cbf3"] },
+  { name: "Purple", colors: ["#667eea", "#764ba2"] },
+  { name: "Green", colors: ["#11998e", "#38ef7d"] },
+  { name: "Pink", colors: ["#ff9a9e", "#fecfef"] },
+  { name: "Gold", colors: ["#ffecd2", "#fcb69f"] },
+  { name: "Fire", colors: ["#ff416c", "#ff4b2b"] },
+  { name: "Sky", colors: ["#a8edea", "#fed6e3"] },
+  { name: "Night", colors: ["#0c0c0c", "#654ea3"] },
+  { name: "Autumn", colors: ["#f79d00", "#64f38c"] },
+  { name: "Cool", colors: ["#2196f3", "#9c27b0"] },
+  { name: "Warm", colors: ["#ff5722", "#ffc107"] },
+];
+
+// Color swatches for quick selection
+const colorSwatches = [
+  "#ff0000", "#ff4000", "#ff8000", "#ffbf00", "#ffff00", "#bfff00",
+  "#80ff00", "#40ff00", "#00ff00", "#00ff40", "#00ff80", "#00ffbf",
+  "#00ffff", "#00bfff", "#0080ff", "#0040ff", "#0000ff", "#4000ff",
+  "#8000ff", "#bf00ff", "#ff00ff", "#ff00bf", "#ff0080", "#ff0040",
+  "#000000", "#404040", "#808080", "#bfbfbf", "#ffffff", "#ffcccc",
+  "#ccffcc", "#ccccff", "#ffffcc", "#ffccff", "#ccffff", "#ffddcc"
+];
+
+// Gradient direction presets
+const directionPresets = [
+  { name: "→", angle: 90, desc: "Left to Right" },
+  { name: "←", angle: 270, desc: "Right to Left" },
+  { name: "↓", angle: 180, desc: "Top to Bottom" },
+  { name: "↑", angle: 0, desc: "Bottom to Top" },
+  { name: "↘", angle: 135, desc: "Diagonal Down" },
+  { name: "↙", angle: 225, desc: "Diagonal Left" },
+  { name: "↖", angle: 315, desc: "Diagonal Up" },
+  { name: "↗", angle: 45, desc: "Diagonal Right" },
+];
+
+const FONT_OPTIONS = [
+  { label: "Arial", value: "arial", css: "Arial, sans-serif" },
+  { label: "Inter", value: "inter", css: `${inter.style.fontFamily}, Arial, sans-serif` },
+  { label: "Domine", value: "domine", css: `${domine.style.fontFamily}, Georgia, serif` },
+  { label: "Roboto", value: "roboto", css: 'Roboto, Arial, sans-serif' },
+  { label: "Lato", value: "lato", css: 'Lato, Arial, sans-serif' },
+  { label: "Montserrat", value: "montserrat", css: 'Montserrat, Arial, sans-serif' },
+  { label: "Oswald", value: "oswald", css: 'Oswald, Arial, sans-serif' },
+  { label: "Playfair Display", value: "playfair", css: 'Playfair Display, Georgia, serif' },
+];
+
+interface ThumbnailCreatorProps {
+  children?: React.ReactNode;
+}
+
+// Debounce utility
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
+const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [selectedStyle, setSelectedStyle] = useState("style1");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [processedImageSrc, setProcessedImageSrc] = useState<string | null>(
-    null,
-  );
+  const [processedImageSrc, setProcessedImageSrc] = useState<string | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
   const [text, setText] = useState("POV");
   const [font, setFont] = useState("arial");
   const [image, setImage] = useState<File | null>(null);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   
+  // Refs for cleanup
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const imageObjectsRef = useRef<HTMLImageElement[]>([]);
+  const fileReaderRef = useRef<FileReader | null>(null);
+
   // Advanced text effects states
   const [textShadow, setTextShadow] = useState(false);
   const [shadowBlur, setShadowBlur] = useState(5);
@@ -1748,6 +1745,8 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
   const [useGradient, setUseGradient] = useState(false);
   const [gradientColor1, setGradientColor1] = useState("#ff0000");
   const [gradientColor2, setGradientColor2] = useState("#0000ff");
+  const [gradientDirection, setGradientDirection] = useState(90);
+  const [textOpacity, setTextOpacity] = useState(100);
   
   // Image filter states
   const [selectedFilter, setSelectedFilter] = useState("none");
@@ -1756,41 +1755,357 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
   const [filterContrast, setFilterContrast] = useState(100);
   const [filterSaturation, setFilterSaturation] = useState(100);
 
-  const setSelectedImage = async (file?: File) => {
-    if (file) {
-      setLoading(true);
-      setImage(file);
-      
+  // Check font loading status
+  useEffect(() => {
+    const checkFonts = async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const src = e.target?.result as string;
-          setImageSrc(src);
+        if ('fonts' in document) {
+          await document.fonts.ready;
+          setFontsLoaded(true);
+        } else {
+          setTimeout(() => setFontsLoaded(true), 1000);
+        }
+      } catch (error) {
+        console.warn("Font loading check failed:", error);
+        setFontsLoaded(true);
+      }
+    };
+    
+    checkFonts();
+  }, []);
 
-          try {
-            const blob = await removeBackground(src);
-            const processedUrl = URL.createObjectURL(blob);
-            setProcessedImageSrc(processedUrl);
-            setCanvasReady(true);
-          } catch (error) {
-            console.error("Error removing background:", error);
-          } finally {
-            setLoading(false);
-          }
-        };
-        reader.readAsDataURL(file);
+  // Cleanup function for component unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      if (fileReaderRef.current) {
+        fileReaderRef.current.abort();
+      }
+      
+      if (processedImageSrc) {
+        URL.revokeObjectURL(processedImageSrc);
+      }
+      
+      imageObjectsRef.current.forEach(img => {
+        img.onload = null;
+        img.onerror = null;
+        img.src = "";
+      });
+      imageObjectsRef.current = [];
+    };
+  }, []);
+
+  // Cleanup processed image URL when it changes
+  useEffect(() => {
+    return () => {
+      if (processedImageSrc) {
+        URL.revokeObjectURL(processedImageSrc);
+      }
+    };
+  }, [processedImageSrc]);
+
+  const setSelectedImage = async (file?: File) => {
+    if (!file) return;
+    
+    setLoading(true);
+    setError(null);
+    setImage(file);
+    
+    // Cancel any existing operations
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    if (fileReaderRef.current) {
+      fileReaderRef.current.abort();
+    }
+    
+    try {
+      abortControllerRef.current = new AbortController();
+      
+      // Process image in chunks to avoid blocking
+      const processImage = async () => {
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          fileReaderRef.current = reader;
+          
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const src = await processImage();
+      
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+      
+      setImageSrc(src);
+
+      // Process background removal in a web worker to avoid blocking
+      try {
+        // Add a small delay to let the UI update
+        await new Promise(resolve => setTimeout(resolve, 10));
+        
+        const blob = await removeBackground(src, {
+          debug: false,
+          proxyToWorker: true,
+          model: 'isnet_fp16',
+          output: {
+            format: 'image/png',
+            quality: 0.8, // Reduce quality for faster processing
+          },
+        });
+        
+        if (abortControllerRef.current?.signal.aborted) {
+          return;
+        }
+        
+        // Clean up previous blob URL
+        if (processedImageSrc) {
+          URL.revokeObjectURL(processedImageSrc);
+        }
+        
+        const processedUrl = URL.createObjectURL(blob);
+        setProcessedImageSrc(processedUrl);
+        setCanvasReady(true);
+        
+      } catch (error) {
+        if (!abortControllerRef.current?.signal.aborted) {
+          console.error("Error removing background:", error);
+          setError("Failed to remove background. Please try again.");
+        }
+      } finally {
+        if (!abortControllerRef.current?.signal.aborted) {
+          setLoading(false);
+        }
+      }
+      
+      // Move generate() to after processing completes
+      try {
         await generate();
       } catch (error) {
-        console.error("Error processing image:", error);
-        setLoading(false);
+        console.error("Error in generate action:", error);
       }
+      
+    } catch (error) {
+      console.error("Error processing image:", error);
+      setError("Failed to process the image. Please try again.");
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (canvasReady && imageSrc && processedImageSrc) {
-      drawCompositeImage();
+  // Generate composite CSS filter string with proper intensity application
+  const getCompositeFilter = useCallback(() => {
+    const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
+    const intensity = filterIntensity / 100;
+    
+    let compositeFilter = "";
+    
+    // Apply base filter with intensity
+    if (filter.filter && filter.filter !== "") {
+      if (selectedFilter === "grayscale") {
+        compositeFilter += `grayscale(${intensity * 100}%)`;
+      } else if (selectedFilter === "sepia") {
+        compositeFilter += `sepia(${intensity * 100}%)`;
+      } else if (selectedFilter === "invert") {
+        compositeFilter += `invert(${intensity * 100}%)`;
+      } else if (selectedFilter === "blur") {
+        compositeFilter += `blur(${intensity * 2}px)`;
+      } else if (selectedFilter === "contrast") {
+        const contrastValue = 100 + (50 * intensity);
+        compositeFilter += `contrast(${contrastValue}%)`;
+      } else if (selectedFilter === "brightness") {
+        const brightnessValue = 100 + (30 * intensity);
+        compositeFilter += `brightness(${brightnessValue}%)`;
+      } else if (selectedFilter === "saturate") {
+        const saturateValue = 100 + (100 * intensity);
+        compositeFilter += `saturate(${saturateValue}%)`;
+      }
     }
+    
+    // Add adjustment filters
+    if (filterBrightness !== 100) {
+      compositeFilter += compositeFilter ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
+    }
+    
+    if (filterContrast !== 100) {
+      compositeFilter += compositeFilter ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
+    }
+    
+    if (filterSaturation !== 100) {
+      compositeFilter += compositeFilter ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
+    }
+    
+    return compositeFilter;
+  }, [selectedFilter, filterIntensity, filterBrightness, filterContrast, filterSaturation]);
+
+  // Optimize drawing function
+  const drawCompositeImage = useCallback(() => {
+    if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc || !fontsLoaded) {
+      return;
+    }
+
+    // Use requestAnimationFrame for smooth rendering
+    requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext("2d", { 
+        alpha: true,
+        desynchronized: true // Improve performance
+      });
+      if (!ctx) return;
+
+      // Clear any existing image objects
+      imageObjectsRef.current.forEach(img => {
+        img.onload = null;
+        img.onerror = null;
+      });
+      imageObjectsRef.current = [];
+
+      const bgImg = new window.Image();
+      imageObjectsRef.current.push(bgImg);
+      
+      bgImg.onload = () => {
+        try {
+          // Set canvas size only if changed
+          if (canvas.width !== bgImg.width || canvas.height !== bgImg.height) {
+            canvas.width = bgImg.width;
+            canvas.height = bgImg.height;
+          }
+
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Apply image filters to background
+          ctx.filter = getCompositeFilter();
+          ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+          ctx.filter = "none";
+
+          let preset = presets.style1;
+          switch (selectedStyle) {
+            case "style2":
+              preset = presets.style2;
+              break;
+            case "style3":
+              preset = presets.style3;
+              break;
+          }
+
+          ctx.save();
+
+          // Text rendering logic
+          try {
+            // Calculate font size
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            let fontSize = 100;
+            let selectFont = FONT_OPTIONS.find(f => f.value === font)?.css || 'Arial, sans-serif';
+            
+            ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
+            const textWidth = ctx.measureText(text).width;
+            const targetWidth = canvas.width * 0.9;
+
+            if (textWidth > 0) {
+              fontSize *= targetWidth / textWidth;
+              ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
+            }
+            
+            const x = canvas.width / 2;
+            const y = canvas.height / 2;
+            
+            ctx.translate(x, y);
+
+            // Apply text shadow if enabled
+            if (textShadow) {
+              ctx.shadowColor = shadowColor;
+              ctx.shadowBlur = shadowBlur;
+              ctx.shadowOffsetX = 2;
+              ctx.shadowOffsetY = 2;
+            }
+            
+            // Draw text outline if enabled (apply opacity to outline as well)
+            if (textOutline) {
+              ctx.lineWidth = outlineWidth;
+              ctx.strokeStyle = outlineColor;
+              // Apply opacity to outline when gradient is used
+              if (useGradient) {
+                ctx.globalAlpha = textOpacity / 100;
+              }
+              ctx.strokeText(text, 0, 0);
+              // Reset alpha for fill
+              ctx.globalAlpha = 1;
+            }
+            
+            // Apply gradient fill if enabled
+            if (useGradient) {
+              const angle = (gradientDirection * Math.PI) / 180;
+              const x1 = Math.cos(angle) * textWidth / 2;
+              const y1 = Math.sin(angle) * fontSize / 2;
+              
+              const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
+              gradient.addColorStop(0, gradientColor1);
+              gradient.addColorStop(1, gradientColor2);
+              ctx.fillStyle = gradient;
+              // Apply custom text opacity for gradient
+              ctx.globalAlpha = textOpacity / 100;
+            } else {
+              ctx.fillStyle = preset.color;
+              ctx.globalAlpha = preset.opacity;
+            }
+            
+            ctx.fillText(text, 0, 0);
+            
+            // Reset context state
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.globalAlpha = 1;
+            
+          } finally {
+            ctx.restore();
+          }
+
+          // Draw the foreground image (with no filter)
+          const fgImg = new window.Image();
+          imageObjectsRef.current.push(fgImg);
+          
+          fgImg.onload = () => {
+            try {
+              ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
+            } catch (error) {
+              console.error("Error drawing foreground image:", error);
+              setError("Failed to draw foreground image.");
+            }
+          };
+          
+          fgImg.onerror = () => {
+            console.error("Failed to load foreground image");
+            setError("Failed to load processed image.");
+          };
+
+          fgImg.src = processedImageSrc;
+          
+        } catch (error) {
+          console.error("Error in background image drawing:", error);
+          setError("Failed to draw background image.");
+        }
+      };
+      
+      bgImg.onerror = () => {
+        console.error("Failed to load background image");
+        setError("Failed to load background image.");
+      };
+
+      bgImg.src = imageSrc;
+    });
   }, [
     canvasReady, 
     text, 
@@ -1807,177 +2122,139 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
     useGradient,
     gradientColor1,
     gradientColor2,
-    selectedFilter,
-    filterIntensity,
-    filterBrightness, 
-    filterContrast, 
-    filterSaturation
+    gradientDirection,
+    textOpacity,
+    getCompositeFilter,
+    fontsLoaded
   ]);
 
-  const drawCompositeImage = () => {
-    if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc)
-      return;
+  // Optimize canvas drawing with debouncing
+  const debouncedDrawCompositeImage = useCallback(
+    debounce(() => {
+      drawCompositeImage();
+    }, 100),
+    [drawCompositeImage]
+  );
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const bgImg = new window.Image();
-    
-    bgImg.onload = () => {
-      canvas.width = bgImg.width;
-      canvas.height = bgImg.height;
-
-      // Apply image filters to background
-      ctx.filter = getCompositeFilter();
-      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-      ctx.filter = "none"; // Reset filter for text and foreground
-
-      let preset = presets.style1;
-      switch (selectedStyle) {
-        case "style2":
-          preset = presets.style2;
-          break;
-        case "style3":
-          preset = presets.style3;
-          break;
-      }
-
-      ctx.save();
-
-      // Calculate font size to fill image 90% of the canvas
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      let fontSize = 100;
-      let selectFont = "arial";
-      switch (font) {
-        case "inter":
-          selectFont = inter.style.fontFamily;
-          break;
-        case "domine":
-          selectFont = domine.style.fontFamily;
-          break;
-      }
-      ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-      const textWidth = ctx.measureText(text).width;
-      const targetWidth = canvas.width * 0.9;
-
-      fontSize *= targetWidth / textWidth;
-      ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-      
-      const x = canvas.width / 2;
-      const y = canvas.height / 2;
-      
-      ctx.translate(x, y);
-
-      // Apply text shadow if enabled
-      if (textShadow) {
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = shadowBlur;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-      }
-      
-      // Draw text outline if enabled
-      if (textOutline) {
-        ctx.lineWidth = outlineWidth;
-        ctx.strokeStyle = outlineColor;
-        ctx.strokeText(text, 0, 0);
-      }
-      
-      // Apply gradient fill if enabled
-      if (useGradient) {
-        const gradient = ctx.createLinearGradient(
-          -textWidth / 2, 
-          -fontSize / 2, 
-          textWidth / 2, 
-          fontSize / 2
-        );
-        gradient.addColorStop(0, gradientColor1);
-        gradient.addColorStop(1, gradientColor2);
-        ctx.fillStyle = gradient;
-      } else {
-        ctx.fillStyle = preset.color;
-      }
-      
-      ctx.globalAlpha = preset.opacity;
-      ctx.fillText(text, 0, 0);
-      
-      // Reset shadow
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      
-      ctx.restore();
-
-      // Draw the foreground image (with no filter)
-      const fgImg = new window.Image();
-      fgImg.onload = () => {
-        ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
-      };
-
-      fgImg.src = processedImageSrc;
-    };
-
-    bgImg.src = imageSrc;
-  };
-  
-  // Generate composite CSS filter string based on current settings
-  const getCompositeFilter = () => {
-    const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
-    const intensity = filterIntensity / 100;
-    
-    let compositeFilter = "";
-    
-    // Base filter if selected
-    if (filter.filter && filter.filter !== "none") {
-      compositeFilter = filter.filter;
+  // Use debounced version for text/effect changes
+  useEffect(() => {
+    if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
+      debouncedDrawCompositeImage();
     }
-    
-    // Add adjustment filters
-    if (filterBrightness !== 100) {
-      compositeFilter += ` brightness(${filterBrightness}%)`;
-    }
-    
-    if (filterContrast !== 100) {
-      compositeFilter += ` contrast(${filterContrast}%)`;
-    }
-    
-    if (filterSaturation !== 100) {
-      compositeFilter += ` saturate(${filterSaturation}%)`;
-    }
-    
-    return compositeFilter;
-  };
+  }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
 
-  const handleDownload = () => {
+  // Optimize download function
+  const handleDownload = useCallback(() => {
     if (canvasRef.current) {
-      const link = document.createElement("a");
-      link.download = "thumbnail.png";
-      link.href = canvasRef.current.toDataURL();
-      link.click();
+      try {
+        canvasRef.current.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.download = "thumbnail.png";
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+          }
+        }, 'image/png', 0.9);
+      } catch (error) {
+        console.error("Error downloading image:", error);
+        setError("Failed to download image.");
+      }
+    }
+  }, []);
+
+  const handleReset = async () => {
+    try {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      if (fileReaderRef.current) {
+        fileReaderRef.current.abort();
+      }
+      
+      if (processedImageSrc) {
+        URL.revokeObjectURL(processedImageSrc);
+      }
+      
+      imageObjectsRef.current.forEach(img => {
+        img.onload = null;
+        img.onerror = null;
+        img.src = "";
+      });
+      imageObjectsRef.current = [];
+      
+      setImageSrc(null);
+      setProcessedImageSrc(null);
+      setCanvasReady(false);
+      setImage(null);
+      setError(null);
+      
+      await refresh();
+    } catch (error) {
+      console.error("Error resetting:", error);
     }
   };
+
+  // Color Swatch Picker Component
+  const ColorSwatchPicker = ({ value, onChange, label }: { value: string; onChange: (color: string) => void; label: string }) => (
+    <div className="space-y-2">
+      <Label className="text-sm">{label}</Label>
+      <div className="flex items-center gap-2 mb-2">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-12 rounded border border-gray-300 cursor-pointer"
+        />
+        <Input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 text-xs flex-1"
+          placeholder="#000000"
+        />
+      </div>
+      <div className="grid grid-cols-6 gap-1">
+        {colorSwatches.map((color, index) => (
+          <button
+            key={index}
+            className="h-6 w-6 rounded border border-gray-200 hover:border-gray-400 transition-colors"
+            style={{ backgroundColor: color }}
+            onClick={() => onChange(color)}
+            title={color}
+          />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <>
       {imageSrc ? (
         <>
           {loading ? (
-            <LoadingScreen message="Removing background..." />
+            <LoadingScreen message="Processing image... This may take a moment." />
           ) : (
             <div className="flex w-full max-w-3xl flex-col items-center gap-6">
+              {error && (
+                <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800 text-sm">{error}</p>
+                  <Button 
+                    onClick={() => setError(null)} 
+                    className="mt-2 text-xs"
+                    variant="outline"
+                    size="sm"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              )}
+              
               <div className="relative w-full">
                 <button
-                  onClick={async () => {
-                    setImageSrc(null);
-                    setProcessedImageSrc(null);
-                    setCanvasReady(false);
-                    setImage(null);
-                    await refresh();
-                  }}
+                  onClick={handleReset}
                   className="absolute -top-2 -left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 backdrop-blur-sm hover:bg-muted transition-colors shadow-sm"
                 >
                   <IoMdArrowBack className="h-4 w-4 text-foreground" />
@@ -2032,14 +2309,14 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                         <Select
                           value={font}
                           onValueChange={(value) => setFont(value)}
-                        >
+                          >
                           <SelectTrigger id="font" className="h-10 w-full">
                             <SelectValue placeholder="Select a font" />
                           </SelectTrigger>
                           <SelectContent position="popper">
-                            <SelectItem value="arial">Arial</SelectItem>
-                            <SelectItem value="inter">Inter</SelectItem>
-                            <SelectItem value="domine">Domine</SelectItem>
+                            {FONT_OPTIONS.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -2081,22 +2358,11 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                               />
                             </div>
                             
-                            <div className="space-y-1">
-                              <Label htmlFor="shadow-color" className="text-sm">Shadow Color</Label>
-                              <div className="flex items-center gap-2">
-                                <div 
-                                  className="h-5 w-5 rounded-full border" 
-                                  style={{ backgroundColor: shadowColor }}
-                                />
-                                <Input
-                                  id="shadow-color"
-                                  type="text"
-                                  value={shadowColor}
-                                  onChange={(e) => setShadowColor(e.target.value)}
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            </div>
+                            <ColorSwatchPicker
+                              value={shadowColor}
+                              onChange={setShadowColor}
+                              label="Shadow Color"
+                            />
                           </div>
                         )}
                       </div>
@@ -2135,27 +2401,16 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                               />
                             </div>
                             
-                            <div className="space-y-1">
-                              <Label htmlFor="outline-color" className="text-sm">Outline Color</Label>
-                              <div className="flex items-center gap-2">
-                                <div 
-                                  className="h-5 w-5 rounded-full border" 
-                                  style={{ backgroundColor: outlineColor }}
-                                />
-                                <Input
-                                  id="outline-color"
-                                  type="text"
-                                  value={outlineColor}
-                                  onChange={(e) => setOutlineColor(e.target.value)}
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            </div>
+                            <ColorSwatchPicker
+                              value={outlineColor}
+                              onChange={setOutlineColor}
+                              label="Outline Color"
+                            />
                           </div>
                         )}
                       </div>
                       
-                      {/* Text Gradient Controls */}
+                      {/* Enhanced Text Gradient Controls with Opacity */}
                       <div className="rounded-lg border p-3">
                         <div className="flex items-center justify-between">
                           <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
@@ -2169,44 +2424,100 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                         </div>
                         
                         {useGradient && (
-                          <div className="mt-3 space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <Label htmlFor="gradient-color-1" className="text-sm">Color 1</Label>
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-5 w-5 rounded-full border" 
-                                    style={{ backgroundColor: gradientColor1 }}
-                                  />
-                                  <Input
-                                    id="gradient-color-1"
-                                    type="text"
-                                    value={gradientColor1}
-                                    onChange={(e) => setGradientColor1(e.target.value)}
-                                    className="h-8 text-xs"
-                                  />
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <Label htmlFor="gradient-color-2" className="text-sm">Color 2</Label>
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-5 w-5 rounded-full border" 
-                                    style={{ backgroundColor: gradientColor2 }}
-                                  />
-                                  <Input
-                                    id="gradient-color-2"
-                                    type="text"
-                                    value={gradientColor2}
-                                    onChange={(e) => setGradientColor2(e.target.value)}
-                                    className="h-8 text-xs"
-                                  />
-                                </div>
+                          <div className="mt-3 space-y-4">
+                            {/* Gradient Presets */}
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Quick Presets</Label>
+                              <div className="grid grid-cols-4 gap-2">
+                                {gradientPresets.map((preset, index) => (
+                                  <button
+                                    key={index}
+                                    className="h-8 rounded border border-gray-200 hover:border-gray-400 transition-colors relative overflow-hidden"
+                                    style={{
+                                      background: `linear-gradient(90deg, ${preset.colors[0]}, ${preset.colors[1]})`
+                                    }}
+                                    onClick={() => {
+                                      setGradientColor1(preset.colors[0] ?? "#000000");
+                                      setGradientColor2(preset.colors[1] ?? "#ffffff");
+                                    }}
+                                    title={preset.name}
+                                  >
+                                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
+                                      {preset.name}
+                                    </span>
+                                  </button>
+                                ))}
                               </div>
                             </div>
-                            <div className="h-4 w-full rounded-md" style={{ 
-                              background: `linear-gradient(to right, ${gradientColor1}, ${gradientColor2})` 
-                            }} />
+                            
+                            {/* Gradient Direction */}
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Gradient Direction</Label>
+                              <div className="grid grid-cols-4 gap-1">
+                                {directionPresets.map((preset, index) => (
+                                  <button
+                                    key={index}
+                                    className={`h-8 text-lg border rounded transition-colors ${
+                                      gradientDirection === preset.angle 
+                                        ? 'border-primary bg-primary/10 text-primary' 
+                                        : 'border-gray-200 hover:border-gray-400'
+                                    }`}
+                                    onClick={() => setGradientDirection(preset.angle)}
+                                    title={preset.desc}
+                                  >
+                                    {preset.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* Color Pickers */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <ColorSwatchPicker
+                                value={gradientColor1}
+                                onChange={setGradientColor1}
+                                label="Color 1"
+                              />
+                              <ColorSwatchPicker
+                                value={gradientColor2}
+                                onChange={setGradientColor2}
+                                label="Color 2"
+                              />
+                            </div>
+                            
+                            {/* Text Opacity Control */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label htmlFor="text-opacity" className="text-sm font-medium">Text Opacity</Label>
+                                <span className="text-xs text-muted-foreground">{textOpacity}%</span>
+                              </div>
+                              <Slider 
+                                id="text-opacity"
+                                min={0} 
+                                max={100} 
+                                step={1}
+                                value={[textOpacity]}
+                                onValueChange={(value: number[]) => {
+                                  if (value[0] !== undefined) {
+                                    setTextOpacity(value[0]);
+                                  }
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Live Preview with Opacity */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">Preview</Label>
+                              <div className="h-8 w-full rounded-md border border-gray-200 relative overflow-hidden bg-gray-100">
+                                <div
+                                  className="absolute inset-0"
+                                  style={{ 
+                                    background: `linear-gradient(${gradientDirection}deg, ${gradientColor1}, ${gradientColor2})`,
+                                    opacity: textOpacity / 100
+                                  }} 
+                                />
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2220,7 +2531,11 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                           {Object.entries(imageFilters).map(([key, filter]) => (
                             <button
                               key={key}
-                              className={`p-1 rounded-md text-xs border ${selectedFilter === key ? 'border-primary ring-1 ring-primary' : 'border-border'}`}
+                              className={`p-1 rounded-md text-xs border transition-colors ${
+                                selectedFilter === key 
+                                  ? 'border-primary ring-1 ring-primary bg-primary/5' 
+                                  : 'border-border hover:border-gray-400'
+                              }`}
                               onClick={() => setSelectedFilter(key)}
                             >
                               {filter.name}
@@ -2309,7 +2624,7 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
                 </CardContent>
                 <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
                   <Button 
-                    onClick={() => handleDownload()} 
+                    onClick={handleDownload} 
                     className="gap-1.5 bg-primary/90 hover:bg-primary"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2332,8 +2647,7 @@ const ThumbnailCreator = ({ children }: { children?: React.ReactNode }) => {
           )}
         </>
       ) : (
-        <div className=" flex flex-col">
-          
+        <div className="flex flex-col">
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">Choose a Template</h2>

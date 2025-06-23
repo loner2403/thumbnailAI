@@ -29,6 +29,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Slider } from "~/components/ui/slider";
 import LoadingScreen from "./LoadingScreen";
 
+// Type for canvas context
+type CanvasContextType = CanvasRenderingContext2D;
+
 const presets = {
   style1: {
     fontSize: 100,
@@ -115,6 +118,15 @@ interface ThumbnailCreatorProps {
   children?: React.ReactNode;
 }
 
+// Debounce utility
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
 const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [selectedStyle, setSelectedStyle] = useState("style1");
   const [loading, setLoading] = useState(false);
@@ -127,6 +139,8 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [font, setFont] = useState("arial");
   const [image, setImage] = useState<File | null>(null);
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [textSize, setTextSize] = useState(100); // Base text size in pixels
+  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | null>(null);
   
   // Refs for cleanup
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -144,7 +158,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [gradientColor1, setGradientColor1] = useState("#ff0000");
   const [gradientColor2, setGradientColor2] = useState("#0000ff");
   const [gradientDirection, setGradientDirection] = useState(90);
-  const [textOpacity, setTextOpacity] = useState(100); // Add text opacity state
+  const [textOpacity, setTextOpacity] = useState(100);
   
   // Image filter states
   const [selectedFilter, setSelectedFilter] = useState("none");
@@ -152,6 +166,12 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [filterBrightness, setFilterBrightness] = useState(100);
   const [filterContrast, setFilterContrast] = useState(100);
   const [filterSaturation, setFilterSaturation] = useState(100);
+
+  // Text position and dragging states
+  const [textPosition, setTextPosition] = useState({ x: 0.5, y: 0.5 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   // Check font loading status
   useEffect(() => {
@@ -207,78 +227,54 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
   const setSelectedImage = async (file?: File) => {
     if (!file) return;
-    
+
     setLoading(true);
     setError(null);
     setImage(file);
-    
+
+    // Let the loader render before heavy work
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Store original dimensions
+    const img = new Image();
+    img.onload = () => {
+      setOriginalDimensions({ width: img.width, height: img.height });
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+
+    // Use object URL for instant, non-blocking preview
+    const src = URL.createObjectURL(file);
+    setImageSrc(src);
+
+    // Cancel any existing operations
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
-    if (fileReaderRef.current) {
-      fileReaderRef.current.abort();
-    }
-    
-    try {
-      abortControllerRef.current = new AbortController();
-      
-      const reader = new FileReader();
-      fileReaderRef.current = reader;
-      
-      reader.onload = async (e) => {
-        try {
-          const src = e.target?.result as string;
-          
-          if (abortControllerRef.current?.signal.aborted) {
-            return;
-          }
-          
-          setImageSrc(src);
 
-          const blob = await removeBackground(src, {
-            debug: false,
-            proxyToWorker: true,
-            model: 'isnet_fp16',
-          });
-          
-          if (abortControllerRef.current?.signal.aborted) {
-            return;
+    // Use a dedicated Web Worker for background removal
+    try {
+      // Dynamically import the worker (Vite/Next.js 13+ syntax)
+      const worker = new Worker(new URL('./backgroundRemoval.worker.js', import.meta.url));
+      worker.postMessage({ imageUrl: src });
+
+      worker.onmessage = (e) => {
+        const { success, blob, error } = e.data;
+        if (success) {
+          if (processedImageSrc) {
+            URL.revokeObjectURL(processedImageSrc);
           }
-          
           const processedUrl = URL.createObjectURL(blob);
           setProcessedImageSrc(processedUrl);
           setCanvasReady(true);
-          
-        } catch (error) {
-          if (!abortControllerRef.current?.signal.aborted) {
-            console.error("Error removing background:", error);
-            setError("Failed to remove background. Please try again.");
-          }
-        } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-            setLoading(false);
-          }
-        }
-      };
-      
-      reader.onerror = () => {
-        if (!abortControllerRef.current?.signal.aborted) {
-          setError("Failed to read the image file.");
+          setLoading(false);
+        } else {
+          setError("Failed to remove background: " + error);
           setLoading(false);
         }
+        worker.terminate();
       };
-      
-      reader.readAsDataURL(file);
-      
-      try {
-        await generate();
-      } catch (error) {
-        console.error("Error in generate action:", error);
-      }
-      
     } catch (error) {
-      console.error("Error processing image:", error);
       setError("Failed to process the image. Please try again.");
       setLoading(false);
     }
@@ -289,189 +285,318 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
     const intensity = filterIntensity / 100;
     
-    let compositeFilter = "";
+    let filterString = "";
     
     // Apply base filter with intensity
     if (filter.filter && filter.filter !== "") {
       if (selectedFilter === "grayscale") {
-        compositeFilter += `grayscale(${intensity * 100}%)`;
+        filterString += `grayscale(${intensity * 100}%)`;
       } else if (selectedFilter === "sepia") {
-        compositeFilter += `sepia(${intensity * 100}%)`;
+        filterString += `sepia(${intensity * 100}%)`;
       } else if (selectedFilter === "invert") {
-        compositeFilter += `invert(${intensity * 100}%)`;
+        filterString += `invert(${intensity * 100}%)`;
       } else if (selectedFilter === "blur") {
-        compositeFilter += `blur(${intensity * 2}px)`;
+        filterString += `blur(${intensity * 2}px)`;
       } else if (selectedFilter === "contrast") {
         const contrastValue = 100 + (50 * intensity);
-        compositeFilter += `contrast(${contrastValue}%)`;
+        filterString += `contrast(${contrastValue}%)`;
       } else if (selectedFilter === "brightness") {
         const brightnessValue = 100 + (30 * intensity);
-        compositeFilter += `brightness(${brightnessValue}%)`;
+        filterString += `brightness(${brightnessValue}%)`;
       } else if (selectedFilter === "saturate") {
         const saturateValue = 100 + (100 * intensity);
-        compositeFilter += `saturate(${saturateValue}%)`;
+        filterString += `saturate(${saturateValue}%)`;
       }
     }
     
     // Add adjustment filters
     if (filterBrightness !== 100) {
-      compositeFilter += compositeFilter ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
+      filterString += filterString ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
     }
     
     if (filterContrast !== 100) {
-      compositeFilter += compositeFilter ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
+      filterString += filterString ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
     }
     
     if (filterSaturation !== 100) {
-      compositeFilter += compositeFilter ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
+      filterString += filterString ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
     }
     
-    return compositeFilter;
+    return filterString;
   }, [selectedFilter, filterIntensity, filterBrightness, filterContrast, filterSaturation]);
+  
+  // Mouse event handlers for dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    // Check if click is near the text
+    const textX = textPosition.x * rect.width;
+    const textY = textPosition.y * rect.height;
+    const distance = Math.sqrt(Math.pow(x * rect.width - textX, 2) + Math.pow(y * rect.height - textY, 2));
+    
+    if (distance < 50) { // 50px click radius
+      setIsDragging(true);
+      dragStartPos.current = {
+        x: x - textPosition.x,
+        y: y - textPosition.y
+      };
+    }
+  }, [textPosition]);
 
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    setTextPosition({
+      x: Math.max(0, Math.min(1, x - dragStartPos.current.x)),
+      y: Math.max(0, Math.min(1, y - dragStartPos.current.y))
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Add event listeners for mouse up outside canvas
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  // Modify the drawCompositeImage function to use custom text size
   const drawCompositeImage = useCallback(() => {
+    console.log('Starting drawCompositeImage at:', performance.now());
     if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc || !fontsLoaded) {
+      console.log('Skipping draw - missing required elements');
       return;
     }
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // Use requestAnimationFrame for smooth rendering
+    requestAnimationFrame(() => {
+      console.log('requestAnimationFrame callback at:', performance.now());
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext("2d", { 
+        alpha: true,
+        desynchronized: true,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      }) as CanvasRenderingContext2D;
+      if (!ctx) return;
 
-    // Clear any existing image objects
-    imageObjectsRef.current.forEach(img => {
-      img.onload = null;
-      img.onerror = null;
-    });
-    imageObjectsRef.current = [];
+      // Clear any existing image objects
+      imageObjectsRef.current.forEach(img => {
+        img.onload = null;
+        img.onerror = null;
+      });
+      imageObjectsRef.current = [];
 
-    const bgImg = new window.Image();
-    imageObjectsRef.current.push(bgImg);
-    
-    bgImg.onload = () => {
-      try {
-        canvas.width = bgImg.width;
-        canvas.height = bgImg.height;
-
-        // Apply image filters to background
-        ctx.filter = getCompositeFilter();
-        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-        ctx.filter = "none"; // Reset filter for text and foreground
-
-        let preset = presets.style1;
-        switch (selectedStyle) {
-          case "style2":
-            preset = presets.style2;
-            break;
-          case "style3":
-            preset = presets.style3;
-            break;
-        }
-
-        ctx.save();
-
-        // Calculate font size to fill image 90% of the canvas
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        let fontSize = 100;
-        let selectFont = FONT_OPTIONS.find(f => f.value === font)?.css || 'Arial, sans-serif';
-        
-        ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-        const textWidth = ctx.measureText(text).width;
-        const targetWidth = canvas.width * 0.9;
-
-        if (textWidth > 0) {
-          fontSize *= targetWidth / textWidth;
-          ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-        }
-        
-        const x = canvas.width / 2;
-        const y = canvas.height / 2;
-        
-        ctx.translate(x, y);
-
-        // Apply text shadow if enabled
-        if (textShadow) {
-          ctx.shadowColor = shadowColor;
-          ctx.shadowBlur = shadowBlur;
-          ctx.shadowOffsetX = 2;
-          ctx.shadowOffsetY = 2;
-        }
-        
-        // Draw text outline if enabled (apply opacity to outline as well)
-        if (textOutline) {
-          ctx.lineWidth = outlineWidth;
-          ctx.strokeStyle = outlineColor;
-          // Apply opacity to outline when gradient is used
-          if (useGradient) {
-            ctx.globalAlpha = textOpacity / 100;
-          }
-          ctx.strokeText(text, 0, 0);
-          // Reset alpha for fill
-          ctx.globalAlpha = 1;
-        }
-        
-        // Apply gradient fill if enabled
-        if (useGradient) {
-          const angle = (gradientDirection * Math.PI) / 180;
-          const x1 = Math.cos(angle) * textWidth / 2;
-          const y1 = Math.sin(angle) * fontSize / 2;
+      const bgImg = new window.Image();
+      imageObjectsRef.current.push(bgImg);
+      
+      console.time('Background image load');
+      bgImg.onload = () => {
+        console.timeEnd('Background image load');
+        console.time('Canvas drawing operations');
+        try {
+          // --- Improved scaling logic ---
+          const MAX_CANVAS_HEIGHT = 500;
+          const MAX_CANVAS_WIDTH = 800;
           
-          const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
-          gradient.addColorStop(0, gradientColor1);
-          gradient.addColorStop(1, gradientColor2);
-          ctx.fillStyle = gradient;
-          // Apply custom text opacity for gradient
-          ctx.globalAlpha = textOpacity / 100;
-        } else {
-          ctx.fillStyle = preset.color;
-          ctx.globalAlpha = preset.opacity;
-        }
-        
-        ctx.fillText(text, 0, 0);
-        
-        // Reset shadow and alpha
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-        ctx.globalAlpha = 1;
-        
-        ctx.restore();
-
-        // Draw the foreground image (with no filter)
-        const fgImg = new window.Image();
-        imageObjectsRef.current.push(fgImg);
-        
-        fgImg.onload = () => {
-          try {
-            ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
-          } catch (error) {
-            console.error("Error drawing foreground image:", error);
-            setError("Failed to draw foreground image.");
+          let drawWidth = bgImg.width;
+          let drawHeight = bgImg.height;
+          let scale = 1;
+          
+          // Calculate scale based on both width and height constraints
+          const heightScale = bgImg.height > MAX_CANVAS_HEIGHT ? MAX_CANVAS_HEIGHT / bgImg.height : 1;
+          const widthScale = bgImg.width > MAX_CANVAS_WIDTH ? MAX_CANVAS_WIDTH / bgImg.width : 1;
+          
+          // Use the smaller scale to ensure image fits within both constraints
+          scale = Math.min(heightScale, widthScale);
+          
+          if (scale < 1) {
+            drawWidth = Math.round(bgImg.width * scale);
+            drawHeight = Math.round(bgImg.height * scale);
           }
-        };
-        
-        fgImg.onerror = () => {
-          console.error("Failed to load foreground image");
-          setError("Failed to load processed image.");
-        };
+          
+          // Get device pixel ratio for high-quality rendering
+          const devicePixelRatio = window.devicePixelRatio || 1;
+          
+          // Set canvas internal dimensions (for high quality)
+          const canvasWidth = drawWidth * devicePixelRatio;
+          const canvasHeight = drawHeight * devicePixelRatio;
+          
+          if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // IMPORTANT: Set the display size using CSS
+            canvas.style.width = `${drawWidth}px`;
+            canvas.style.height = `${drawHeight}px`;
+          }
 
-        fgImg.src = processedImageSrc;
-        
-      } catch (error) {
-        console.error("Error in background image drawing:", error);
-        setError("Failed to draw background image.");
-      }
-    };
-    
-    bgImg.onerror = () => {
-      console.error("Failed to load background image");
-      setError("Failed to load background image.");
-    };
+          // Reset any existing transformations
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          
+          // Scale the context to match the device pixel ratio
+          ctx.scale(devicePixelRatio, devicePixelRatio);
 
-    bgImg.src = imageSrc;
+          // Enable high-quality image rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+
+          // Clear canvas
+          ctx.clearRect(0, 0, drawWidth, drawHeight);
+
+          // Calculate center position for the image
+          const x = (drawWidth - bgImg.width * scale) / 2;
+          const y = (drawHeight - bgImg.height * scale) / 2;
+
+          // Apply image filters to background
+          ctx.filter = getCompositeFilter();
+          // Draw the image centered
+          ctx.drawImage(bgImg, x, y, bgImg.width * scale, bgImg.height * scale);
+          ctx.filter = "none";
+
+          let preset = presets.style1;
+          switch (selectedStyle) {
+            case "style2":
+              preset = presets.style2;
+              break;
+            case "style3":
+              preset = presets.style3;
+              break;
+          }
+
+          ctx.save();
+
+          // Text rendering logic
+          try {
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            let selectFont = FONT_OPTIONS.find(f => f.value === font)?.css || 'Arial, sans-serif';
+            
+            // Use custom text size directly
+            ctx.font = `${preset.fontWeight} ${textSize}px ${selectFont}`;
+            
+            // Calculate text dimensions for gradient
+            const textMetrics = ctx.measureText(text);
+            const textWidth = textMetrics.width;
+            
+            // Use textPosition for x and y coordinates
+            const x = drawWidth * textPosition.x;
+            const y = drawHeight * textPosition.y;
+            
+            ctx.translate(x, y);
+
+            // Apply text shadow if enabled
+            if (textShadow) {
+              ctx.shadowColor = shadowColor;
+              ctx.shadowBlur = shadowBlur;
+              ctx.shadowOffsetX = 2;
+              ctx.shadowOffsetY = 2;
+            }
+
+            // Draw text outline if enabled (apply opacity to outline as well)
+            if (textOutline) {
+              ctx.lineWidth = outlineWidth;
+              ctx.strokeStyle = outlineColor;
+              // Apply opacity to outline when gradient is used
+              if (useGradient) {
+                ctx.globalAlpha = textOpacity / 100;
+              }
+              ctx.strokeText(text, 0, 0);
+              // Reset alpha for fill
+              ctx.globalAlpha = 1;
+            }
+
+            // Apply gradient fill if enabled
+            if (useGradient) {
+              const angle = (gradientDirection * Math.PI) / 180;
+              const x1 = Math.cos(angle) * textWidth / 2;
+              const y1 = Math.sin(angle) * textSize / 2; // Use textSize instead of fontSize
+              
+              const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
+              gradient.addColorStop(0, gradientColor1);
+              gradient.addColorStop(1, gradientColor2);
+              ctx.fillStyle = gradient;
+              // Apply custom text opacity for gradient
+              ctx.globalAlpha = textOpacity / 100;
+            } else {
+              ctx.fillStyle = preset.color;
+              ctx.globalAlpha = preset.opacity;
+            }
+
+            ctx.fillText(text, 0, 0);
+
+            // Reset context state
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.globalAlpha = 1;
+
+          } finally {
+            ctx.restore();
+          }
+
+          // Draw the foreground image centered as well
+          const fgImg = new window.Image();
+          imageObjectsRef.current.push(fgImg);
+
+          fgImg.onload = () => {
+            console.time('Foreground image draw');
+            try {
+              // Ensure high quality for foreground image too
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(fgImg, x, y, bgImg.width * scale, bgImg.height * scale);
+              console.timeEnd('Foreground image draw');
+              console.timeEnd('Canvas drawing operations');
+              console.log('Completed all drawing operations at:', performance.now());
+            } catch (error) {
+              console.error("Error drawing foreground image:", error);
+              setError("Failed to draw foreground image.");
+            }
+          };
+
+          fgImg.onerror = () => {
+            console.error("Failed to load foreground image");
+            setError("Failed to load processed image.");
+          };
+
+          fgImg.src = processedImageSrc;
+
+        } catch (error) {
+          console.error("Error in background image drawing:", error);
+          setError("Failed to draw background image.");
+        }
+      };
+      
+      bgImg.onerror = () => {
+        console.error("Failed to load background image");
+        setError("Failed to load background image.");
+      };
+
+      bgImg.src = imageSrc;
+    });
   }, [
     canvasReady, 
     text, 
@@ -489,30 +614,70 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     gradientColor1,
     gradientColor2,
     gradientDirection,
-    textOpacity, // Add textOpacity to dependencies
+    textOpacity,
     getCompositeFilter,
-    fontsLoaded
+    fontsLoaded,
+    textPosition,
+    textSize,
   ]);
 
+  // Optimize canvas drawing with debouncing
+  const debouncedDrawCompositeImage = useCallback(
+    debounce(() => {
+      console.log('Debounced drawCompositeImage triggered at:', performance.now());
+      drawCompositeImage();
+    }, 100),
+    [drawCompositeImage]
+  );
+
+  // Use debounced version for text/effect changes
   useEffect(() => {
     if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
-      drawCompositeImage();
+      console.log('useEffect triggered draw at:', performance.now(), 
+        { canvasReady, imageSrc: !!imageSrc, processedImageSrc: !!processedImageSrc, fontsLoaded });
+      debouncedDrawCompositeImage();
     }
-  }, [drawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
+  }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
 
-  const handleDownload = () => {
-    if (canvasRef.current) {
-      try {
-        const link = document.createElement("a");
-        link.download = "thumbnail.png";
-        link.href = canvasRef.current.toDataURL();
-        link.click();
-      } catch (error) {
-        console.error("Error downloading image:", error);
-        setError("Failed to download image.");
-      }
+  // Optimize download function
+  const handleDownload = useCallback(() => {
+    if (!canvasRef.current || !originalDimensions) return;
+    
+    try {
+      // Create a temporary canvas for high-resolution export
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d', {
+        alpha: true,
+        desynchronized: true,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+      }) as CanvasRenderingContext2D;
+      
+      if (!tempCtx) return;
+      
+      // Set the canvas to original dimensions
+      tempCanvas.width = originalDimensions.width;
+      tempCanvas.height = originalDimensions.height;
+      
+      // Draw the current canvas content scaled to original dimensions
+      tempCtx.drawImage(canvasRef.current, 0, 0, originalDimensions.width, originalDimensions.height);
+      
+      // Convert to blob and download
+      tempCanvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+      }, 'image/png', 1.0);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      setError("Failed to download image.");
     }
-  };
+  }, [originalDimensions]);
 
   const handleReset = async () => {
     try {
@@ -585,47 +750,53 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       {imageSrc ? (
         <>
           {loading ? (
-            <LoadingScreen message="Removing background..." />
+            <LoadingScreen message="Processing image... This may take a moment." />
           ) : (
-            <div className="flex w-full max-w-3xl flex-col items-center gap-6">
-              {error && (
-                <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800 text-sm">{error}</p>
-                  <Button 
-                    onClick={() => setError(null)} 
-                    className="mt-2 text-xs"
-                    variant="outline"
-                    size="sm"
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              )}
-              
-              <div className="relative w-full">
-                <button
-                  onClick={handleReset}
-                  className="absolute -top-2 -left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 backdrop-blur-sm hover:bg-muted transition-colors shadow-sm"
-                >
-                  <IoMdArrowBack className="h-4 w-4 text-foreground" />
-                </button>
+            <div className="flex w-full mx-4 gap-6">
+              <div className="w-[70%]">
+                {error && (
+                  <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                    <p className="text-red-800 text-sm">{error}</p>
+                    <Button 
+                      onClick={() => setError(null)} 
+                      className="mt-2 text-xs"
+                      variant="outline"
+                      size="sm"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                )}
                 
-                <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard">
-                  <canvas
-                    ref={canvasRef}
-                    className="h-auto w-full max-w-full"
-                  ></canvas>
+                <div className="relative w-full" ref={canvasContainerRef}>
+                  <button
+                    onClick={handleReset}
+                    className="absolute -top-2 -left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 backdrop-blur-sm hover:bg-muted transition-colors shadow-sm"
+                  >
+                    <IoMdArrowBack className="h-4 w-4 text-foreground" />
+                  </button>
+                  
+                  <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard">
+                    <canvas
+                      ref={canvasRef}
+                      className={`h-auto w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    ></canvas>
+                  </div>
                 </div>
               </div>
               
-              <Card className="w-full border-none shadow-md bg-background/80 backdrop-blur-sm">
+              <Card className="w-[25%] max-h-[65vh] border-none shadow-md bg-background/80 backdrop-blur-sm flex flex-col">
                 <CardHeader className="pb-3 px-5">
                   <CardTitle className="text-lg font-medium flex items-center gap-2">
                     <Sliders className="h-4 w-4 text-primary" />
                     Edit Thumbnail
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-5">
+                <CardContent className="px-5 flex-1 overflow-y-auto">
                   <Tabs defaultValue="text" className="w-full">
                     <TabsList className="grid w-full grid-cols-3 mb-4">
                       <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
@@ -642,7 +813,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                       </TabsTrigger>
                     </TabsList>
                     
-                    {/* Basic Text Tab */}
+                    {/* Text Tab */}
                     <TabsContent value="text" className="space-y-5">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
@@ -654,6 +825,27 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                           className="h-10"
                         />
                       </div>
+
+                      {/* Add Text Size Control */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="text-size" className="text-sm">Text Size</Label>
+                          <span className="text-xs text-muted-foreground">{textSize}px</span>
+                        </div>
+                        <Slider 
+                          id="text-size"
+                          min={20} 
+                          max={400} 
+                          step={1}
+                          value={[textSize]}
+                          onValueChange={(value: number[]) => {
+                            if (value[0] !== undefined) {
+                              setTextSize(value[0]);
+                            }
+                          }}
+                        />
+                      </div>
+
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
                         <Select
@@ -978,7 +1170,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                     className="gap-1.5 bg-primary/90 hover:bg-primary"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
@@ -997,14 +1189,14 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
           )}
         </>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col mx-3">
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">Choose a Template</h2>
               <p className="text-muted-foreground">Select a style for your thumbnail design</p>
             </div>
             
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
               <Style
                 image="/style1.png"
                 selectStyle={() => setSelectedStyle("style1")}

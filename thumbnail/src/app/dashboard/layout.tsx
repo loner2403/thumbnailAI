@@ -40,7 +40,7 @@ export default async function RootLayout({
       {/* Main content with subtle background pattern */}
       <main className="flex-1 bg-grid-pattern">
         <div 
-          className="container mx-auto px-4 py-8 md:py-12 max-w-6xl"
+          className="container mx-auto px-4 py-8 md:py-12 max-w-7xl"
           style={{
             backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.05) 1px, transparent 0)',
             backgroundSize: '40px 40px'

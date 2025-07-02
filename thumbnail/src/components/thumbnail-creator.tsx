@@ -28,6 +28,8 @@ import { Type, Image as LucideImage, Sliders } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Slider } from "~/components/ui/slider";
 import LoadingScreen from "./LoadingScreen";
+import { blob } from "stream/consumers";
+import { getPresignedUrl } from "~/app/actions/aws";
 
 // Type for canvas context
 type CanvasContextType = CanvasRenderingContext2D;
@@ -662,15 +664,32 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       // Draw the current canvas content scaled to original dimensions
       tempCtx.drawImage(canvasRef.current, 0, 0, originalDimensions.width, originalDimensions.height);
       
-      // Convert to blob and download
-      tempCanvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
+      // Convert to blob, upload to S3, and download locally
+      tempCanvas.toBlob(async (blob) => {
+        if(blob) {
+          try {
+            // TODO: Replace with API call to get presigned URL
+            const uploadUrl = await getPresignedUrl();
+            await fetch(uploadUrl, {
+              method: "PUT",
+              body: blob,
+              headers: {
+                "Content-Type": "image/png",
+              }
+            });
+            console.log("File uploaded successfully!");
+
+            // Download the image locally
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+          } catch (error) {
+            console.error("Error uploading or downloading image:", error);
+            setError("Failed to upload or download image.");
+          }
         }
       }, 'image/png', 1.0);
     } catch (error) {

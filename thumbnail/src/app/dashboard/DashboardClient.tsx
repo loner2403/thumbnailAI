@@ -1,9 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardFooter } from "~/components/ui/card";
+import { Card } from "~/components/ui/card";
 import ThumbnailCreator from "~/components/thumbnail-creator";
-import { ImageIcon, Sparkles, Zap, Link2 } from "lucide-react";
-import Recent from "~/components/recent";
 
 export default function DashboardClient() {
   return (

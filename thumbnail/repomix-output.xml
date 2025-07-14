@@ -51,8 +51,10 @@ prettier.config.js
 prisma/schema.prisma
 README.md
 src/app/actions/auth.ts
+src/app/actions/aws.ts
 src/app/actions/generate.ts
 src/app/api/auth/[...nextauth]/route.ts
+src/app/api/deduct-credits/route.ts
 src/app/dashboard/DashboardClient.tsx
 src/app/dashboard/layout.tsx
 src/app/dashboard/page.tsx
@@ -62,7 +64,9 @@ src/app/layout.tsx
 src/app/page.tsx
 src/app/signin/page.tsx
 src/app/signup/page.tsx
+src/components/backgroundRemoval.worker.js
 src/components/credits.tsx
+src/components/download-recent-thumbnail.tsx
 src/components/dropzone.tsx
 src/components/LoadingScreen.tsx
 src/components/recent.tsx
@@ -300,14 +304,16 @@ export default config;
     "@radix-ui/react-tooltip": "^1.2.6",
     "@t3-oss/env-nextjs": "^0.12.0",
     "@types/bcryptjs": "^3.0.0",
+    "aws-sdk": "^2.1692.0",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "data-fns": "^1.1.0",
     "lucide-react": "^0.510.0",
     "next": "^15.2.3",
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.6",
-    "react": "^19.0.0",
+    "react": "^19.1.0",
     "react-best-gradient-color-picker": "^3.0.14",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.3",
@@ -513,8 +519,78 @@ export const signup = async (email: string, password: string) => {
 };
 </file>
 
+<file path="src/app/actions/aws.ts">
+"use server"
+
+import AWS from "aws-sdk";
+import { redirect } from "next/navigation";
+import { env } from "~/env";
+import { auth } from "~/server/auth";
+
+const s3 = new AWS.S3({
+    accessKeyId: env.AWS_ACCESS_KEY,
+    secretAccessKey: env.AWS_SECRET_KEY,
+    region: env.AWS_REGION
+
+})
+
+export const getPresignedUrl = async () => {
+    const serverSession = await auth();
+
+    if(!serverSession || !serverSession.user?.id) {
+        throw new Error("User not authenticated");
+    }
+
+    // Format date as yyyyMMddHHmmss
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const userId = serverSession.user.id;
+    const key = `${userId}/thumbnail-${timestamp}.png`;
+
+    const params = {
+        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Key: key,
+        Expires: 60,
+        ContentType: "image/png"
+    };
+
+    const uploadUrl = s3.getSignedUrl("putObject", params);
+
+    return uploadUrl;
+}
+
+export const downloadS3File = async (url: string) => {
+    const serverSession = await auth();
+
+    if(!serverSession) {
+        throw new Error("User not authorized");
+    }
+
+    const key = url.replace(
+        `https://${env.AWS_THUMBNAIL_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/`,
+        ""
+    )
+
+    const params = {
+        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Key: key,
+        Expires: 3600,
+        ResponseContentDisposition: 'attachment; filename="thumbnail.png"',
+    };
+
+    const downloadUrl = s3.getSignedUrl("getObject", params);
+
+    return downloadUrl;
+}
+</file>
+
 <file path="src/app/actions/generate.ts">
 "use server";
+
+import { revalidatePath } from "next/cache";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
 
 // Simple server-side actions for thumbnail generation
 
@@ -522,16 +598,43 @@ export const signup = async (email: string, password: string) => {
  * Generate action - placeholder for any server-side processing
  */
 export async function generate() {
-  console.log("Generate action called");
-  return Promise.resolve(true);
+  const serverSession = await auth();
+
+  if (!serverSession || !serverSession.user) {
+    throw new Error("User not authenticated");
+  }
+
+  const user = await db.user.findUnique({
+    where: {
+      id: serverSession.user.id,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (user.credits <= 0) {
+    throw new Error("Not enough credits");
+  }
+
+  await db.user.update({
+    where: {
+      id: serverSession.user.id,
+    },
+    data: {
+      credits: {
+        decrement: 1,
+      },
+    },
+  });
 }
 
 /**
  * Refresh action - placeholder for any server-side refresh operation
  */
 export async function refresh() {
-  console.log("Refresh action called");
-  return Promise.resolve(true);
+  revalidatePath("/dashboard");
 }
 </file>
 
@@ -543,36 +646,48 @@ export const GET = NextAuth(authConfig);
 export const POST = NextAuth(authConfig);
 </file>
 
+<file path="src/app/api/deduct-credits/route.ts">
+import { NextRequest, NextResponse } from "next/server";
+import { generate } from "~/app/actions/generate";
+
+export async function POST(req: NextRequest) {
+  try {
+    await generate();
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message || "Unknown error" }, { status: 400 });
+  }
+}
+</file>
+
 <file path="src/app/dashboard/DashboardClient.tsx">
 "use client";
 
-
-import { Card, CardContent, CardFooter } from "~/components/ui/card";
+import { Card } from "~/components/ui/card";
 import ThumbnailCreator from "~/components/thumbnail-creator";
-import { ImageIcon, Sparkles, Zap, Link2 } from "lucide-react";
-import Recent from "~/components/recent";
-
 
 export default function DashboardClient() {
   return (
-    <div className="w-full min-h-screen">
-      <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
-        Hi there,
-      </h1>
-      <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
-        Want to create a thumbnail?
-      </h1>
-      <p className="mt-2 leading-7 text-muted-foreground">
-        Use one of the templates below
-      </p>
+    <div className="w-full">
+      <div className="w-full">
+        <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+          Hi there,
+        </h1>
+        <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+          Want to create a thumbnail?
+        </h1>
+        <p className="mt-2 leading-7 text-muted-foreground">
+          Use one of the templates below
+        </p>
 
-      {/* Dashboard Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-0 w-full">
-        {/* Main Content - Thumbnail Creator */}
-        <Card className="col-span-1 lg:col-span-7 border-none shadow-sm bg-background/60 backdrop-blur-sm overflow-hidden w-full h-full">
-          <ThumbnailCreator />
-        </Card>
-        {/* Sidebar removed */}
+        {/* Dashboard Content */}
+        <div className="grid grid-cols-1 w-full">
+          {/* Main Content - Thumbnail Creator */}
+          <Card className="w-full h-full">
+            <ThumbnailCreator />
+          </Card>
+          {/* Sidebar removed */}
+        </div>
       </div>
     </div>
   );
@@ -622,7 +737,7 @@ export default async function RootLayout({
       {/* Main content with subtle background pattern */}
       <main className="flex-1 bg-grid-pattern">
         <div 
-          className="container mx-auto px-4 py-8 md:py-12 max-w-6xl"
+          className="container mx-auto px-4 py-8 md:py-12 max-w-7xl"
           style={{
             backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.05) 1px, transparent 0)',
             backgroundSize: '40px 40px'
@@ -1041,6 +1156,33 @@ export default async function SignUpPage() {
 }
 </file>
 
+<file path="src/components/backgroundRemoval.worker.js">
+import { removeBackground } from '@imgly/background-removal';
+
+self.onmessage = async (e) => {
+  const { imageUrl } = e.data;
+  try {
+    const result = await removeBackground(imageUrl, {
+      debug: false,
+      proxyToWorker: false, // Already in a worker!
+      model: 'isnet_fp16',
+      output: {
+        format: 'image/png',
+        quality: 0.6,
+      },
+    });
+    // result is a Blob
+    self.postMessage({ success: true, blob: result });
+  } catch (error) {
+    let message = 'Unknown error';
+    if (error && typeof error === 'object' && 'message' in error && typeof (error.message) === 'string') {
+      message = error.message;
+    }
+    self.postMessage({ success: false, error: message });
+  }
+};
+</file>
+
 <file path="src/components/credits.tsx">
 "use server"
 
@@ -1092,6 +1234,30 @@ const Credits = async () => {
 };
 
 export default Credits;
+</file>
+
+<file path="src/components/download-recent-thumbnail.tsx">
+"use client"
+
+import { downloadS3File } from "~/app/actions/aws";
+import { Button } from "./ui/button";
+
+const DownloadRecentThumbnail = ({ url }: { url: string }) => {
+    const handleDownload = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        const downloadUrl = await downloadS3File(url);
+        window.location.href = downloadUrl;
+    };
+
+    return (
+        <Button onClick={handleDownload}
+            className="w-full" variant="outline">
+            Download
+        </Button>
+    );
+};
+
+export default DownloadRecentThumbnail;
 </file>
 
 <file path="src/components/dropzone.tsx">
@@ -1374,8 +1540,43 @@ export default LoadingScreen;
 
 import { Separator } from "@radix-ui/react-select";
 import { Button } from "./ui/button";
+import { auth } from "~/server/auth";
+import AWS from "aws-sdk";
+import { env } from "~/env";
+import DownloadRecentThumbnail from "./download-recent-thumbnail";
 
-const recent = () => {
+const Recent = async () => {
+
+    const serverSession = await auth();
+
+    const s3 = new AWS.S3({
+        accessKeyId: env.AWS_ACCESS_KEY,
+        secretAccessKey: env.AWS_SECRET_KEY,
+        region: env.AWS_REGION
+    
+    })
+
+    const prefix = `${serverSession?.user.id}/`;
+
+    const params = {
+        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Prefix: prefix,
+        MaxKeys: 10
+    };
+
+    const data = await s3.listObjectsV2(params).promise();
+
+    const recentThumbnails = (data.Contents ?? [])
+        .sort((a, b) => {
+            const dateA = new Date(a.LastModified ?? 0).getTime();
+            const dateB = new Date(b.LastModified ?? 0).getTime();
+            return dateB - dateA;
+        })
+        .map((item) => ({
+            url: `https://${env.AWS_THUMBNAIL_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${item.Key}`,
+            createdAt: item.LastModified
+        }));
+
     return <div className="flex flex-col">
         <h3 className="scroll-m-20 text-xl font-semibold tracking-tight">
             Recent Thumbnails
@@ -1385,74 +1586,32 @@ const recent = () => {
         </p>
         <Separator className="my-2" />
         <div className="flex h-fit max-w-full gap-2 overflow-x-scroll">
-            <div className="flex min-w-fit flex-col gap-1">
-                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
-                <p className="text-sm">
-                    From{" "}
-                    {new Date().toLocaleDateString("en-GB",{
-                        day: "2-digit",
-                        month:"2-digit",
-                        year: "numeric",
-                    })}
-                </p>
-                <Button className="w-full" variant="outline">
-                    Download
-                </Button>
-
-            </div>
-            <div className="flex min-w-fit flex-col gap-1">
-                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
-                <p className="text-sm">
-                    From{" "}
-                    {new Date().toLocaleDateString("en-GB",{
-                        day: "2-digit",
-                        month:"2-digit",
-                        year: "numeric",
-                    })}
-                </p>
-                <Button className="w-full" variant="outline">
-                    Download
-                </Button>
-                
-            </div>
-            <div className="flex min-w-fit flex-col gap-1">
-                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
-                <p className="text-sm">
-                    From{" "}
-                    {new Date().toLocaleDateString("en-GB",{
-                        day: "2-digit",
-                        month:"2-digit",
-                        year: "numeric",
-                    })}
-                </p>
-                <Button className="w-full" variant="outline">
-                    Download
-                </Button>
-                
-            </div>
-            <div className="flex min-w-fit flex-col gap-1">
-                <img src="/style1.png" alt="image" className="h-56 w-auto rounded-lg object-contain" />
-                <p className="text-sm">
-                    From{" "}
-                    {new Date().toLocaleDateString("en-GB",{
-                        day: "2-digit",
-                        month:"2-digit",
-                        year: "numeric",
-                    })}
-                </p>
-                <Button className="w-full" variant="outline">
-                    Download
-                </Button>
-                
-            </div>
-
-
+            {recentThumbnails?.map((thumbnail, idx) => (
+                <div key={idx} className="flex min-w-fit flex-col gap-1">
+                    <img
+                        src={thumbnail.url}
+                        alt="thumbnail"
+                        className="h-56 w-auto rounded-lg object-contain"
+                    />
+                    <p className="text-sm">
+                        From{" "}
+                        {thumbnail.createdAt
+                            ? new Date(thumbnail.createdAt).toLocaleDateString("en-GB", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                            })
+                            : "Unknown"}
+                    </p>
+                    <DownloadRecentThumbnail url={thumbnail.url} />
+                </div>
+            ))}
         </div>
 
     </div>;
 };
 
-export default recent;
+export default Recent;
 </file>
 
 <file path="src/components/SessionProvider.tsx">
@@ -1621,6 +1780,12 @@ import { Type, Image as LucideImage, Sliders } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Slider } from "~/components/ui/slider";
 import LoadingScreen from "./LoadingScreen";
+import { blob } from "stream/consumers";
+import { getPresignedUrl } from "~/app/actions/aws";
+import ReactDOM from "react-dom";
+
+// Type for canvas context
+type CanvasContextType = CanvasRenderingContext2D;
 
 const presets = {
   style1: {
@@ -1717,6 +1882,39 @@ const debounce = (func: Function, wait: number) => {
   };
 };
 
+// Modal component
+const Modal = ({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) => {
+  if (!open) return null;
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close modal overlay"
+      />
+      {/* Modal content */}
+      <div
+        className="relative bg-background rounded-2xl shadow-2xl flex flex-col w-[95vw] h-[95vh] max-w-[95vw] max-h-[95vh] overflow-hidden border border-border animate-in fade-in zoom-in-95"
+        style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center cursor-pointer rounded-full bg-muted/80 hover:bg-muted transition-colors shadow-sm"
+          aria-label="Close modal"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <div className="flex-1 flex flex-col overflow-auto">{children}</div>
+      </div>
+    </div>,
+    typeof window !== "undefined" ? document.body : (null as any)
+  );
+};
+
 const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [selectedStyle, setSelectedStyle] = useState("style1");
   const [loading, setLoading] = useState(false);
@@ -1729,6 +1927,8 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [font, setFont] = useState("arial");
   const [image, setImage] = useState<File | null>(null);
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [textSize, setTextSize] = useState(100); // Base text size in pixels
+  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | null>(null);
   
   // Refs for cleanup
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1754,6 +1954,12 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [filterBrightness, setFilterBrightness] = useState(100);
   const [filterContrast, setFilterContrast] = useState(100);
   const [filterSaturation, setFilterSaturation] = useState(100);
+
+  // Text position and dragging states
+  const [textPosition, setTextPosition] = useState({ x: 0.5, y: 0.5 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   // Check font loading status
   useEffect(() => {
@@ -1807,93 +2013,73 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     };
   }, [processedImageSrc]);
 
+  const [modalOpen, setModalOpen] = useState(false);
+
   const setSelectedImage = async (file?: File) => {
     if (!file) return;
-    
+    setModalOpen(true);
+
     setLoading(true);
     setError(null);
     setImage(file);
-    
+
+    // Let the loader render before heavy work
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Store original dimensions
+    const img = new Image();
+    img.onload = () => {
+      setOriginalDimensions({ width: img.width, height: img.height });
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+
+    // Use object URL for instant, non-blocking preview
+    const src = URL.createObjectURL(file);
+    setImageSrc(src);
+
     // Cancel any existing operations
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
-    if (fileReaderRef.current) {
-      fileReaderRef.current.abort();
-    }
-    
+
+    // Use a dedicated Web Worker for background removal
     try {
-      abortControllerRef.current = new AbortController();
-      
-      // Process image in chunks to avoid blocking
-      const processImage = async () => {
-        return new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          fileReaderRef.current = reader;
-          
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      };
+      // Dynamically import the worker (Vite/Next.js 13+ syntax)
+      const worker = new Worker(new URL('./backgroundRemoval.worker.js', import.meta.url));
+      worker.postMessage({ imageUrl: src });
 
-      const src = await processImage();
-      
-      if (abortControllerRef.current?.signal.aborted) {
-        return;
-      }
-      
-      setImageSrc(src);
+      worker.onmessage = async (e) => {
+        const { success, blob, error } = e.data;
+        if (success) {
+          if (processedImageSrc) {
+            URL.revokeObjectURL(processedImageSrc);
+          }
+          const processedUrl = URL.createObjectURL(blob);
+          setProcessedImageSrc(processedUrl);
+          setCanvasReady(true);
+          setLoading(false);
 
-      // Process background removal in a web worker to avoid blocking
-      try {
-        // Add a small delay to let the UI update
-        await new Promise(resolve => setTimeout(resolve, 10));
-        
-        const blob = await removeBackground(src, {
-          debug: false,
-          proxyToWorker: true,
-          model: 'isnet_fp16',
-          output: {
-            format: 'image/png',
-            quality: 0.8, // Reduce quality for faster processing
-          },
-        });
-        
-        if (abortControllerRef.current?.signal.aborted) {
-          return;
-        }
-        
-        // Clean up previous blob URL
-        if (processedImageSrc) {
-          URL.revokeObjectURL(processedImageSrc);
-        }
-        
-        const processedUrl = URL.createObjectURL(blob);
-        setProcessedImageSrc(processedUrl);
-        setCanvasReady(true);
-        
-      } catch (error) {
-        if (!abortControllerRef.current?.signal.aborted) {
-          console.error("Error removing background:", error);
-          setError("Failed to remove background. Please try again.");
-        }
-      } finally {
-        if (!abortControllerRef.current?.signal.aborted) {
+          // Deduct credits after image is generated
+          try {
+            const res = await fetch("/api/deduct-credits", { method: "POST" });
+            const data = await res.json();
+            if (!data.success) {
+              setError("Failed to deduct credits. " + (data.error || "You may not have enough credits left."));
+              // Optionally, you can disable further actions here
+              return;
+            }
+          } catch (err) {
+            setError("Failed to deduct credits. Please try again.");
+            return;
+          }
+        } else {
+          setError("Failed to remove background: " + error);
           setLoading(false);
         }
-      }
-      
-      // Move generate() to after processing completes
-      try {
-        await generate();
-      } catch (error) {
-        console.error("Error in generate action:", error);
-      }
-      
+        worker.terminate();
+      };
     } catch (error) {
-      console.error("Error processing image:", error);
       setError("Failed to process the image. Please try again.");
       setLoading(false);
     }
@@ -1904,61 +2090,119 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
     const intensity = filterIntensity / 100;
     
-    let compositeFilter = "";
+    let filterString = "";
     
     // Apply base filter with intensity
     if (filter.filter && filter.filter !== "") {
       if (selectedFilter === "grayscale") {
-        compositeFilter += `grayscale(${intensity * 100}%)`;
+        filterString += `grayscale(${intensity * 100}%)`;
       } else if (selectedFilter === "sepia") {
-        compositeFilter += `sepia(${intensity * 100}%)`;
+        filterString += `sepia(${intensity * 100}%)`;
       } else if (selectedFilter === "invert") {
-        compositeFilter += `invert(${intensity * 100}%)`;
+        filterString += `invert(${intensity * 100}%)`;
       } else if (selectedFilter === "blur") {
-        compositeFilter += `blur(${intensity * 2}px)`;
+        filterString += `blur(${intensity * 2}px)`;
       } else if (selectedFilter === "contrast") {
         const contrastValue = 100 + (50 * intensity);
-        compositeFilter += `contrast(${contrastValue}%)`;
+        filterString += `contrast(${contrastValue}%)`;
       } else if (selectedFilter === "brightness") {
         const brightnessValue = 100 + (30 * intensity);
-        compositeFilter += `brightness(${brightnessValue}%)`;
+        filterString += `brightness(${brightnessValue}%)`;
       } else if (selectedFilter === "saturate") {
         const saturateValue = 100 + (100 * intensity);
-        compositeFilter += `saturate(${saturateValue}%)`;
+        filterString += `saturate(${saturateValue}%)`;
       }
     }
     
     // Add adjustment filters
     if (filterBrightness !== 100) {
-      compositeFilter += compositeFilter ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
+      filterString += filterString ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
     }
     
     if (filterContrast !== 100) {
-      compositeFilter += compositeFilter ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
+      filterString += filterString ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
     }
     
     if (filterSaturation !== 100) {
-      compositeFilter += compositeFilter ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
+      filterString += filterString ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
     }
     
-    return compositeFilter;
+    return filterString;
   }, [selectedFilter, filterIntensity, filterBrightness, filterContrast, filterSaturation]);
+  
+  // Mouse event handlers for dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    // Check if click is near the text
+    const textX = textPosition.x * rect.width;
+    const textY = textPosition.y * rect.height;
+    const distance = Math.sqrt(Math.pow(x * rect.width - textX, 2) + Math.pow(y * rect.height - textY, 2));
+    
+    if (distance < 50) { // 50px click radius
+      setIsDragging(true);
+      dragStartPos.current = {
+        x: x - textPosition.x,
+        y: y - textPosition.y
+      };
+    }
+  }, [textPosition]);
 
-  // Optimize drawing function
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    setTextPosition({
+      x: Math.max(0, Math.min(1, x - dragStartPos.current.x)),
+      y: Math.max(0, Math.min(1, y - dragStartPos.current.y))
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Add event listeners for mouse up outside canvas
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  // Modify the drawCompositeImage function to use custom text size
   const drawCompositeImage = useCallback(() => {
+    console.log('Starting drawCompositeImage at:', performance.now());
     if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc || !fontsLoaded) {
+      console.log('Skipping draw - missing required elements');
       return;
     }
 
     // Use requestAnimationFrame for smooth rendering
     requestAnimationFrame(() => {
+      console.log('requestAnimationFrame callback at:', performance.now());
       const canvas = canvasRef.current;
       if (!canvas) return;
       
       const ctx = canvas.getContext("2d", { 
         alpha: true,
-        desynchronized: true // Improve performance
-      });
+        desynchronized: true,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      }) as CanvasRenderingContext2D;
       if (!ctx) return;
 
       // Clear any existing image objects
@@ -1971,20 +2215,68 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       const bgImg = new window.Image();
       imageObjectsRef.current.push(bgImg);
       
+      console.time('Background image load');
       bgImg.onload = () => {
+        console.timeEnd('Background image load');
+        console.time('Canvas drawing operations');
         try {
-          // Set canvas size only if changed
-          if (canvas.width !== bgImg.width || canvas.height !== bgImg.height) {
-            canvas.width = bgImg.width;
-            canvas.height = bgImg.height;
+          // --- Improved scaling logic ---
+          const MAX_CANVAS_HEIGHT = 500;
+          const MAX_CANVAS_WIDTH = 800;
+          
+          let drawWidth = bgImg.width;
+          let drawHeight = bgImg.height;
+          let scale = 1;
+          
+          // Calculate scale based on both width and height constraints
+          const heightScale = bgImg.height > MAX_CANVAS_HEIGHT ? MAX_CANVAS_HEIGHT / bgImg.height : 1;
+          const widthScale = bgImg.width > MAX_CANVAS_WIDTH ? MAX_CANVAS_WIDTH / bgImg.width : 1;
+          
+          // Use the smaller scale to ensure image fits within both constraints
+          scale = Math.min(heightScale, widthScale);
+          
+          if (scale < 1) {
+            drawWidth = Math.round(bgImg.width * scale);
+            drawHeight = Math.round(bgImg.height * scale);
+          }
+          
+          // Get device pixel ratio for high-quality rendering
+          const devicePixelRatio = window.devicePixelRatio || 1;
+          
+          // Set canvas internal dimensions (for high quality)
+          const canvasWidth = drawWidth * devicePixelRatio;
+          const canvasHeight = drawHeight * devicePixelRatio;
+          
+          if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // IMPORTANT: Set the display size using CSS
+            canvas.style.width = `${drawWidth}px`;
+            canvas.style.height = `${drawHeight}px`;
           }
 
+          // Reset any existing transformations
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          
+          // Scale the context to match the device pixel ratio
+          ctx.scale(devicePixelRatio, devicePixelRatio);
+
+          // Enable high-quality image rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+
           // Clear canvas
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.clearRect(0, 0, drawWidth, drawHeight);
+
+          // Calculate center position for the image
+          const x = (drawWidth - bgImg.width * scale) / 2;
+          const y = (drawHeight - bgImg.height * scale) / 2;
 
           // Apply image filters to background
           ctx.filter = getCompositeFilter();
-          ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+          // Draw the image centered
+          ctx.drawImage(bgImg, x, y, bgImg.width * scale, bgImg.height * scale);
           ctx.filter = "none";
 
           let preset = presets.style1;
@@ -2001,24 +2293,21 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
           // Text rendering logic
           try {
-            // Calculate font size
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
-            let fontSize = 100;
             let selectFont = FONT_OPTIONS.find(f => f.value === font)?.css || 'Arial, sans-serif';
             
-            ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-            const textWidth = ctx.measureText(text).width;
-            const targetWidth = canvas.width * 0.9;
-
-            if (textWidth > 0) {
-              fontSize *= targetWidth / textWidth;
-              ctx.font = `${preset.fontWeight} ${fontSize}px ${selectFont}`;
-            }
+            // Use custom text size directly
+            ctx.font = `${preset.fontWeight} ${textSize}px ${selectFont}`;
             
-            const x = canvas.width / 2;
-            const y = canvas.height / 2;
+            // Calculate text dimensions for gradient
+            const textMetrics = ctx.measureText(text);
+            const textWidth = textMetrics.width;
+            
+            // Use textPosition for x and y coordinates
+            const x = drawWidth * textPosition.x;
+            const y = drawHeight * textPosition.y;
             
             ctx.translate(x, y);
 
@@ -2029,7 +2318,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
               ctx.shadowOffsetX = 2;
               ctx.shadowOffsetY = 2;
             }
-            
+
             // Draw text outline if enabled (apply opacity to outline as well)
             if (textOutline) {
               ctx.lineWidth = outlineWidth;
@@ -2042,12 +2331,12 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
               // Reset alpha for fill
               ctx.globalAlpha = 1;
             }
-            
+
             // Apply gradient fill if enabled
             if (useGradient) {
               const angle = (gradientDirection * Math.PI) / 180;
               const x1 = Math.cos(angle) * textWidth / 2;
-              const y1 = Math.sin(angle) * fontSize / 2;
+              const y1 = Math.sin(angle) * textSize / 2; // Use textSize instead of fontSize
               
               const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
               gradient.addColorStop(0, gradientColor1);
@@ -2059,40 +2348,47 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
               ctx.fillStyle = preset.color;
               ctx.globalAlpha = preset.opacity;
             }
-            
+
             ctx.fillText(text, 0, 0);
-            
+
             // Reset context state
             ctx.shadowColor = "transparent";
             ctx.shadowBlur = 0;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             ctx.globalAlpha = 1;
-            
+
           } finally {
             ctx.restore();
           }
 
-          // Draw the foreground image (with no filter)
+          // Draw the foreground image centered as well
           const fgImg = new window.Image();
           imageObjectsRef.current.push(fgImg);
-          
+
           fgImg.onload = () => {
+            console.time('Foreground image draw');
             try {
-              ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
+              // Ensure high quality for foreground image too
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(fgImg, x, y, bgImg.width * scale, bgImg.height * scale);
+              console.timeEnd('Foreground image draw');
+              console.timeEnd('Canvas drawing operations');
+              console.log('Completed all drawing operations at:', performance.now());
             } catch (error) {
               console.error("Error drawing foreground image:", error);
               setError("Failed to draw foreground image.");
             }
           };
-          
+
           fgImg.onerror = () => {
             console.error("Failed to load foreground image");
             setError("Failed to load processed image.");
           };
 
           fgImg.src = processedImageSrc;
-          
+
         } catch (error) {
           console.error("Error in background image drawing:", error);
           setError("Failed to draw background image.");
@@ -2125,12 +2421,15 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     gradientDirection,
     textOpacity,
     getCompositeFilter,
-    fontsLoaded
+    fontsLoaded,
+    textPosition,
+    textSize,
   ]);
 
   // Optimize canvas drawing with debouncing
   const debouncedDrawCompositeImage = useCallback(
     debounce(() => {
+      console.log('Debounced drawCompositeImage triggered at:', performance.now());
       drawCompositeImage();
     }, 100),
     [drawCompositeImage]
@@ -2139,30 +2438,80 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   // Use debounced version for text/effect changes
   useEffect(() => {
     if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
+      console.log('useEffect triggered draw at:', performance.now(), 
+        { canvasReady, imageSrc: !!imageSrc, processedImageSrc: !!processedImageSrc, fontsLoaded });
       debouncedDrawCompositeImage();
     }
   }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
 
   // Optimize download function
-  const handleDownload = useCallback(() => {
-    if (canvasRef.current) {
+  const handleDownload = useCallback(async () => {
+    if (!canvasRef.current || !originalDimensions) return;
+    
+    try {
+      // Deduct a credit before allowing download (via API route)
       try {
-        canvasRef.current.toBlob((blob) => {
-          if (blob) {
+        const res = await fetch("/api/deduct-credits", { method: "POST" });
+        const data = await res.json();
+        if (!data.success) {
+          setError("Failed to deduct credits. " + (data.error || "You may not have enough credits left."));
+          return;
+        }
+      } catch (err) {
+        setError("Failed to deduct credits. Please try again.");
+        return;
+      }
+      // Create a temporary canvas for high-resolution export
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d', {
+        alpha: true,
+        debsynchronized: true,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+      }) as CanvasRenderingContext2D;
+      
+      if (!tempCtx) return;
+      
+      // Set the canvas to original dimensions
+      tempCanvas.width = originalDimensions.width;
+      tempCanvas.height = originalDimensions.height;
+       
+      // Draw the current canvas content scaled to original dimensions
+      tempCtx.drawImage(canvasRef.current, 0, 0, originalDimensions.width, originalDimensions.height);
+      
+      // Convert to blob, upload to S3, and download locally
+      tempCanvas.toBlob(async (blob) => {
+        if(blob) {
+          try {
+            // TODO: Replace with API call to get presigned URL
+            const uploadUrl = await getPresignedUrl();
+            await fetch(uploadUrl, {
+              method: "PUT",
+              body: blob,
+              headers: {
+                "Content-Type": "image/png",
+              }
+            });
+            console.log("File uploaded successfully!");
+
+            // Download the image locally
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.download = "thumbnail.png";
+            link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);
+          } catch (error) {
+            console.error("Error uploading or downloading image:", error);
+            setError("Failed to upload or download image.");
           }
-        }, 'image/png', 0.9);
-      } catch (error) {
-        console.error("Error downloading image:", error);
-        setError("Failed to download image.");
-      }
+        }
+      }, 'image/png', 1.0);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      setError("Failed to download image.");
     }
-  }, []);
+  }, [originalDimensions]);
 
   const handleReset = async () => {
     try {
@@ -2190,6 +2539,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       setCanvasReady(false);
       setImage(null);
       setError(null);
+      setModalOpen(false);
       
       await refresh();
     } catch (error) {
@@ -2232,429 +2582,15 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
   return (
     <>
-      {imageSrc ? (
-        <>
-          {loading ? (
-            <LoadingScreen message="Processing image... This may take a moment." />
-          ) : (
-            <div className="flex w-full max-w-3xl flex-col items-center gap-6">
-              {error && (
-                <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800 text-sm">{error}</p>
-                  <Button 
-                    onClick={() => setError(null)} 
-                    className="mt-2 text-xs"
-                    variant="outline"
-                    size="sm"
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              )}
-              
-              <div className="relative w-full">
-                <button
-                  onClick={handleReset}
-                  className="absolute -top-2 -left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 backdrop-blur-sm hover:bg-muted transition-colors shadow-sm"
-                >
-                  <IoMdArrowBack className="h-4 w-4 text-foreground" />
-                </button>
-                
-                <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard">
-                  <canvas
-                    ref={canvasRef}
-                    className="h-auto w-full max-w-full"
-                  ></canvas>
-                </div>
-              </div>
-              
-              <Card className="w-full border-none shadow-md bg-background/80 backdrop-blur-sm">
-                <CardHeader className="pb-3 px-5">
-                  <CardTitle className="text-lg font-medium flex items-center gap-2">
-                    <Sliders className="h-4 w-4 text-primary" />
-                    Edit Thumbnail
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-5">
-                  <Tabs defaultValue="text" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 mb-4">
-                      <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
-                        <Type className="h-3.5 w-3.5" />
-                        <span>Text</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="effects" className="flex items-center gap-1.5 text-xs">
-                        <Type className="h-3.5 w-3.5" />
-                        <span>Text Effects</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="filters" className="flex items-center gap-1.5 text-xs">
-                        <LucideImage className="h-3.5 w-3.5" />
-                        <span>Image Filters</span>
-                      </TabsTrigger>
-                    </TabsList>
-                    
-                    {/* Basic Text Tab */}
-                    <TabsContent value="text" className="space-y-5">
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
-                        <Input
-                          value={text}
-                          onChange={(e) => setText(e.target.value)}
-                          id="text"
-                          placeholder="Enter text for your thumbnail"
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
-                        <Select
-                          value={font}
-                          onValueChange={(value) => setFont(value)}
-                          >
-                          <SelectTrigger id="font" className="h-10 w-full">
-                            <SelectValue placeholder="Select a font" />
-                          </SelectTrigger>
-                          <SelectContent position="popper">
-                            {FONT_OPTIONS.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </TabsContent>
-                    
-                    {/* Text Effects Tab */}
-                    <TabsContent value="effects" className="space-y-4 mt-4">
-                      {/* Text Shadow Controls */}
-                      <div className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="shadow-toggle" className="font-medium">Text Shadow</Label>
-                          <input 
-                            type="checkbox" 
-                            id="shadow-toggle"
-                            checked={textShadow}
-                            onChange={(e) => setTextShadow(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                        </div>
-                        
-                        {textShadow && (
-                          <div className="mt-3 space-y-3">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <Label htmlFor="shadow-blur" className="text-sm">Blur</Label>
-                                <span className="text-xs text-muted-foreground">{shadowBlur}px</span>
-                              </div>
-                              <Slider 
-                                id="shadow-blur"
-                                min={0} 
-                                max={20} 
-                                step={1}
-                                value={[shadowBlur]}
-                                onValueChange={(value: number[]) => {
-                                  if (value[0] !== undefined) {
-                                    setShadowBlur(value[0]);
-                                  }
-                                }}
-                              />
-                            </div>
-                            
-                            <ColorSwatchPicker
-                              value={shadowColor}
-                              onChange={setShadowColor}
-                              label="Shadow Color"
-                            />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Text Outline Controls */}
-                      <div className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="outline-toggle" className="font-medium">Text Outline</Label>
-                          <input 
-                            type="checkbox" 
-                            id="outline-toggle"
-                            checked={textOutline}
-                            onChange={(e) => setTextOutline(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                        </div>
-                        
-                        {textOutline && (
-                          <div className="mt-3 space-y-3">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <Label htmlFor="outline-width" className="text-sm">Width</Label>
-                                <span className="text-xs text-muted-foreground">{outlineWidth}px</span>
-                              </div>
-                              <Slider 
-                                id="outline-width"
-                                min={1} 
-                                max={10} 
-                                step={1}
-                                value={[outlineWidth]}
-                                onValueChange={(value: number[]) => {
-                                  if (value[0] !== undefined) {
-                                    setOutlineWidth(value[0]);
-                                  }
-                                }}
-                              />
-                            </div>
-                            
-                            <ColorSwatchPicker
-                              value={outlineColor}
-                              onChange={setOutlineColor}
-                              label="Outline Color"
-                            />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Enhanced Text Gradient Controls with Opacity */}
-                      <div className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
-                          <input 
-                            type="checkbox" 
-                            id="gradient-toggle"
-                            checked={useGradient}
-                            onChange={(e) => setUseGradient(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                        </div>
-                        
-                        {useGradient && (
-                          <div className="mt-3 space-y-4">
-                            {/* Gradient Presets */}
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Quick Presets</Label>
-                              <div className="grid grid-cols-4 gap-2">
-                                {gradientPresets.map((preset, index) => (
-                                  <button
-                                    key={index}
-                                    className="h-8 rounded border border-gray-200 hover:border-gray-400 transition-colors relative overflow-hidden"
-                                    style={{
-                                      background: `linear-gradient(90deg, ${preset.colors[0]}, ${preset.colors[1]})`
-                                    }}
-                                    onClick={() => {
-                                      setGradientColor1(preset.colors[0] ?? "#000000");
-                                      setGradientColor2(preset.colors[1] ?? "#ffffff");
-                                    }}
-                                    title={preset.name}
-                                  >
-                                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
-                                      {preset.name}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            
-                            {/* Gradient Direction */}
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Gradient Direction</Label>
-                              <div className="grid grid-cols-4 gap-1">
-                                {directionPresets.map((preset, index) => (
-                                  <button
-                                    key={index}
-                                    className={`h-8 text-lg border rounded transition-colors ${
-                                      gradientDirection === preset.angle 
-                                        ? 'border-primary bg-primary/10 text-primary' 
-                                        : 'border-gray-200 hover:border-gray-400'
-                                    }`}
-                                    onClick={() => setGradientDirection(preset.angle)}
-                                    title={preset.desc}
-                                  >
-                                    {preset.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            
-                            {/* Color Pickers */}
-                            <div className="grid grid-cols-2 gap-3">
-                              <ColorSwatchPicker
-                                value={gradientColor1}
-                                onChange={setGradientColor1}
-                                label="Color 1"
-                              />
-                              <ColorSwatchPicker
-                                value={gradientColor2}
-                                onChange={setGradientColor2}
-                                label="Color 2"
-                              />
-                            </div>
-                            
-                            {/* Text Opacity Control */}
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <Label htmlFor="text-opacity" className="text-sm font-medium">Text Opacity</Label>
-                                <span className="text-xs text-muted-foreground">{textOpacity}%</span>
-                              </div>
-                              <Slider 
-                                id="text-opacity"
-                                min={0} 
-                                max={100} 
-                                step={1}
-                                value={[textOpacity]}
-                                onValueChange={(value: number[]) => {
-                                  if (value[0] !== undefined) {
-                                    setTextOpacity(value[0]);
-                                  }
-                                }}
-                              />
-                            </div>
-                            
-                            {/* Live Preview with Opacity */}
-                            <div className="space-y-2">
-                              <Label className="text-sm">Preview</Label>
-                              <div className="h-8 w-full rounded-md border border-gray-200 relative overflow-hidden bg-gray-100">
-                                <div
-                                  className="absolute inset-0"
-                                  style={{ 
-                                    background: `linear-gradient(${gradientDirection}deg, ${gradientColor1}, ${gradientColor2})`,
-                                    opacity: textOpacity / 100
-                                  }} 
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                    
-                    {/* Image Filters Tab */}
-                    <TabsContent value="filters" className="space-y-4 mt-4">
-                      <div className="space-y-3">
-                        <Label htmlFor="filter-preset" className="font-medium">Filter Preset</Label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {Object.entries(imageFilters).map(([key, filter]) => (
-                            <button
-                              key={key}
-                              className={`p-1 rounded-md text-xs border transition-colors ${
-                                selectedFilter === key 
-                                  ? 'border-primary ring-1 ring-primary bg-primary/5' 
-                                  : 'border-border hover:border-gray-400'
-                              }`}
-                              onClick={() => setSelectedFilter(key)}
-                            >
-                              {filter.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="brightness" className="text-sm">Brightness</Label>
-                          <span className="text-xs text-muted-foreground">{filterBrightness}%</span>
-                        </div>
-                        <Slider 
-                          id="brightness"
-                          min={50} 
-                          max={150} 
-                          step={1}
-                          value={[filterBrightness]}
-                          onValueChange={(value: number[]) => {
-                            if (value[0] !== undefined) {
-                              setFilterBrightness(value[0]);
-                            }
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="contrast" className="text-sm">Contrast</Label>
-                          <span className="text-xs text-muted-foreground">{filterContrast}%</span>
-                        </div>
-                        <Slider 
-                          id="contrast"
-                          min={50} 
-                          max={150} 
-                          step={1}
-                          value={[filterContrast]}
-                          onValueChange={(value: number[]) => {
-                            if (value[0] !== undefined) {
-                              setFilterContrast(value[0]);
-                            }
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="saturation" className="text-sm">Saturation</Label>
-                          <span className="text-xs text-muted-foreground">{filterSaturation}%</span>
-                        </div>
-                        <Slider 
-                          id="saturation"
-                          min={0} 
-                          max={200} 
-                          step={1}
-                          value={[filterSaturation]}
-                          onValueChange={(value: number[]) => {
-                            if (value[0] !== undefined) {
-                              setFilterSaturation(value[0]);
-                            }
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="intensity" className="text-sm">Effect Intensity</Label>
-                          <span className="text-xs text-muted-foreground">{filterIntensity}%</span>
-                        </div>
-                        <Slider 
-                          id="intensity"
-                          min={0} 
-                          max={100} 
-                          step={1}
-                          value={[filterIntensity]}
-                          onValueChange={(value: number[]) => {
-                            if (value[0] !== undefined) {
-                              setFilterIntensity(value[0]);
-                            }
-                          }}
-                        />
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-                <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
-                  <Button 
-                    onClick={handleDownload} 
-                    className="gap-1.5 bg-primary/90 hover:bg-primary"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download
-                  </Button>
-                  <Button 
-                    onClick={drawCompositeImage} 
-                    className="gap-1.5 bg-muted/80 hover:bg-muted text-foreground"
-                  >
-                    <Sliders className="h-4 w-4" />
-                    Update
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="flex flex-col">
+      {/* Main page: only style selection and upload */}
+      {!modalOpen && (
+        <div className="flex flex-col mx-3">
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">Choose a Template</h2>
               <p className="text-muted-foreground">Select a style for your thumbnail design</p>
             </div>
-            
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
               <Style
                 image="/style1.png"
                 selectStyle={() => setSelectedStyle("style1")}
@@ -2682,6 +2618,440 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
           <div className="mt-8">{children}</div>
         </div>
       )}
+      {/* Modal for processing, editing, and download */}
+      <Modal open={modalOpen} onClose={handleReset}>
+        {imageSrc ? (
+          <>
+            {loading ? (
+              <LoadingScreen message="Processing image... This may take a moment." />
+            ) : (
+              <div className="flex w-full h-full gap-6 p-6 overflow-auto flex-col md:flex-row">
+                <div className="w-full md:w-[70%] flex items-center justify-center mb-4 md:mb-0">
+                  {error && (
+                    <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                      <p className="text-red-800 text-sm">{error}</p>
+                      <Button 
+                        onClick={() => setError(null)} 
+                        className="mt-2 text-xs"
+                        variant="outline"
+                        size="sm"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  )}
+                  <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard w-full">
+                    <canvas
+                      ref={canvasRef}
+                      className={`h-auto w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    ></canvas>
+                  </div>
+                </div>
+                <Card className="w-full md:w-[25%] max-h-[80vh] border-none shadow-md bg-background/80 backdrop-blur-sm flex flex-col">
+                  <CardHeader className="pb-3 px-5">
+                    <CardTitle className="text-lg font-medium flex items-center gap-2">
+                      <Sliders className="h-4 w-4 text-primary" />
+                      Edit Thumbnail
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-5 flex-1 overflow-y-auto">
+                    <Tabs defaultValue="text" className="w-full">
+                      <TabsList className="grid w-full grid-cols-3 mb-4">
+                        <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
+                          <Type className="h-3.5 w-3.5" />
+                          <span>Text</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="effects" className="flex items-center gap-1.5 text-xs">
+                          <Type className="h-3.5 w-3.5" />
+                          <span>Text Effects</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="filters" className="flex items-center gap-1.5 text-xs">
+                          <LucideImage className="h-3.5 w-3.5" />
+                          <span>Image Filters</span>
+                        </TabsTrigger>
+                      </TabsList>
+                      
+                      {/* Text Tab */}
+                      <TabsContent value="text" className="space-y-5">
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
+                          <Input
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            id="text"
+                            placeholder="Enter text for your thumbnail"
+                            className="h-10"
+                          />
+                        </div>
+
+                        {/* Add Text Size Control */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="text-size" className="text-sm">Text Size</Label>
+                            <span className="text-xs text-muted-foreground">{textSize}px</span>
+                          </div>
+                          <Slider 
+                            id="text-size"
+                            min={20} 
+                            max={400} 
+                            step={1}
+                            value={[textSize]}
+                            onValueChange={(value: number[]) => {
+                              if (value[0] !== undefined) {
+                                setTextSize(value[0]);
+                              }
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
+                          <Select
+                            value={font}
+                            onValueChange={(value) => setFont(value)}
+                          >
+                            <SelectTrigger id="font" className="h-10 w-full">
+                              <SelectValue placeholder="Select a font" />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              {FONT_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </TabsContent>
+                      
+                      {/* Text Effects Tab */}
+                      <TabsContent value="effects" className="space-y-4 mt-4">
+                        {/* Text Shadow Controls */}
+                        <div className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="shadow-toggle" className="font-medium">Text Shadow</Label>
+                            <input 
+                              type="checkbox" 
+                              id="shadow-toggle"
+                              checked={textShadow}
+                              onChange={(e) => setTextShadow(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                          </div>
+                          
+                          {textShadow && (
+                            <div className="mt-3 space-y-3">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor="shadow-blur" className="text-sm">Blur</Label>
+                                  <span className="text-xs text-muted-foreground">{shadowBlur}px</span>
+                                </div>
+                                <Slider 
+                                  id="shadow-blur"
+                                  min={0} 
+                                  max={20} 
+                                  step={1}
+                                  value={[shadowBlur]}
+                                  onValueChange={(value: number[]) => {
+                                    if (value[0] !== undefined) {
+                                      setShadowBlur(value[0]);
+                                    }
+                                  }}
+                                />
+                              </div>
+                              
+                              <ColorSwatchPicker
+                                value={shadowColor}
+                                onChange={setShadowColor}
+                                label="Shadow Color"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Text Outline Controls */}
+                        <div className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="outline-toggle" className="font-medium">Text Outline</Label>
+                            <input 
+                              type="checkbox" 
+                              id="outline-toggle"
+                              checked={textOutline}
+                              onChange={(e) => setTextOutline(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                          </div>
+                          
+                          {textOutline && (
+                            <div className="mt-3 space-y-3">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor="outline-width" className="text-sm">Width</Label>
+                                  <span className="text-xs text-muted-foreground">{outlineWidth}px</span>
+                                </div>
+                                <Slider 
+                                  id="outline-width"
+                                  min={1} 
+                                  max={10} 
+                                  step={1}
+                                  value={[outlineWidth]}
+                                  onValueChange={(value: number[]) => {
+                                    if (value[0] !== undefined) {
+                                      setOutlineWidth(value[0]);
+                                    }
+                                  }}
+                                />
+                              </div>
+                              
+                              <ColorSwatchPicker
+                                value={outlineColor}
+                                onChange={setOutlineColor}
+                                label="Outline Color"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Enhanced Text Gradient Controls with Opacity */}
+                        <div className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
+                            <input 
+                              type="checkbox" 
+                              id="gradient-toggle"
+                              checked={useGradient}
+                              onChange={(e) => setUseGradient(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                          </div>
+                          
+                          {useGradient && (
+                            <div className="mt-3 space-y-4">
+                              {/* Gradient Presets */}
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Quick Presets</Label>
+                                <div className="grid grid-cols-4 gap-2">
+                                  {gradientPresets.map((preset, index) => (
+                                    <button
+                                      key={index}
+                                      className="h-8 rounded border border-gray-200 hover:border-gray-400 transition-colors relative overflow-hidden"
+                                      style={{
+                                        background: `linear-gradient(90deg, ${preset.colors[0]}, ${preset.colors[1]})`
+                                      }}
+                                      onClick={() => {
+                                        setGradientColor1(preset.colors[0] ?? "#000000");
+                                        setGradientColor2(preset.colors[1] ?? "#ffffff");
+                                      }}
+                                      title={preset.name}
+                                    >
+                                      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
+                                        {preset.name}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* Gradient Direction */}
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Gradient Direction</Label>
+                                <div className="grid grid-cols-4 gap-1">
+                                  {directionPresets.map((preset, index) => (
+                                    <button
+                                      key={index}
+                                      className={`h-8 text-lg border rounded transition-colors ${
+                                        gradientDirection === preset.angle 
+                                          ? 'border-primary bg-primary/10 text-primary' 
+                                          : 'border-gray-200 hover:border-gray-400'
+                                      }`}
+                                      onClick={() => setGradientDirection(preset.angle)}
+                                      title={preset.desc}
+                                    >
+                                      {preset.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* Color Pickers */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <ColorSwatchPicker
+                                  value={gradientColor1}
+                                  onChange={setGradientColor1}
+                                  label="Color 1"
+                                />
+                                <ColorSwatchPicker
+                                  value={gradientColor2}
+                                  onChange={setGradientColor2}
+                                  label="Color 2"
+                                />
+                              </div>
+                              
+                              {/* Text Opacity Control */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor="text-opacity" className="text-sm font-medium">Text Opacity</Label>
+                                  <span className="text-xs text-muted-foreground">{textOpacity}%</span>
+                                </div>
+                                <Slider 
+                                  id="text-opacity"
+                                  min={0} 
+                                  max={100} 
+                                  step={1}
+                                  value={[textOpacity]}
+                                  onValueChange={(value: number[]) => {
+                                    if (value[0] !== undefined) {
+                                      setTextOpacity(value[0]);
+                                    }
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* Live Preview with Opacity */}
+                              <div className="space-y-2">
+                                <Label className="text-sm">Preview</Label>
+                                <div className="h-8 w-full rounded-md border border-gray-200 relative overflow-hidden bg-gray-100">
+                                  <div
+                                    className="absolute inset-0"
+                                    style={{ 
+                                      background: `linear-gradient(${gradientDirection}deg, ${gradientColor1}, ${gradientColor2})`,
+                                      opacity: textOpacity / 100
+                                    }} 
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+                      
+                      {/* Image Filters Tab */}
+                      <TabsContent value="filters" className="space-y-4 mt-4">
+                        <div className="space-y-3">
+                          <Label htmlFor="filter-preset" className="font-medium">Filter Preset</Label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {Object.entries(imageFilters).map(([key, filter]) => (
+                              <button
+                                key={key}
+                                className={`p-1 rounded-md text-xs border transition-colors ${
+                                  selectedFilter === key 
+                                    ? 'border-primary ring-1 ring-primary bg-primary/5' 
+                                    : 'border-border hover:border-gray-400'
+                                }`}
+                                onClick={() => setSelectedFilter(key)}
+                              >
+                                {filter.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="brightness" className="text-sm">Brightness</Label>
+                            <span className="text-xs text-muted-foreground">{filterBrightness}%</span>
+                          </div>
+                          <Slider 
+                            id="brightness"
+                            min={50} 
+                            max={150} 
+                            step={1}
+                            value={[filterBrightness]}
+                            onValueChange={(value: number[]) => {
+                              if (value[0] !== undefined) {
+                                setFilterBrightness(value[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="contrast" className="text-sm">Contrast</Label>
+                            <span className="text-xs text-muted-foreground">{filterContrast}%</span>
+                          </div>
+                          <Slider 
+                            id="contrast"
+                            min={50} 
+                            max={150} 
+                            step={1}
+                            value={[filterContrast]}
+                            onValueChange={(value: number[]) => {
+                              if (value[0] !== undefined) {
+                                setFilterContrast(value[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="saturation" className="text-sm">Saturation</Label>
+                            <span className="text-xs text-muted-foreground">{filterSaturation}%</span>
+                          </div>
+                          <Slider 
+                            id="saturation"
+                            min={0} 
+                            max={200} 
+                            step={1}
+                            value={[filterSaturation]}
+                            onValueChange={(value: number[]) => {
+                              if (value[0] !== undefined) {
+                                setFilterSaturation(value[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="intensity" className="text-sm">Effect Intensity</Label>
+                            <span className="text-xs text-muted-foreground">{filterIntensity}%</span>
+                          </div>
+                          <Slider 
+                            id="intensity"
+                            min={0} 
+                            max={100} 
+                            step={1}
+                            value={[filterIntensity]}
+                            onValueChange={(value: number[]) => {
+                              if (value[0] !== undefined) {
+                                setFilterIntensity(value[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                  <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
+                    <Button 
+                      onClick={handleDownload} 
+                      className="gap-1.5 bg-primary/90 hover:bg-primary"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      Download
+                    </Button>
+                    <Button 
+                      onClick={drawCompositeImage} 
+                      className="gap-1.5 bg-muted/80 hover:bg-muted text-foreground"
+                    >
+                      <Sliders className="h-4 w-4" />
+                      Update
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
+            )}
+          </>
+        ) : null}
+      </Modal>
     </>
   );
 };
@@ -3634,6 +4004,11 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+
+      AWS_ACCESS_KEY: z.string(),
+      AWS_SECRET_KEY: z.string(),
+      AWS_REGION: z.string(),
+      AWS_THUMBNAIL_BUCKET: z.string()
   },
 
   /**
@@ -3653,6 +4028,11 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    AWS_ACCESS_KEY: process.env.AWS_ACCESS_KEY,
+    AWS_SECRET_KEY: process.env.AWS_SECRET_KEY,
+    AWS_THUMBNAIL_BUCKET: process.env.AWS_THUMBNAILS_BUCKET,
+    AWS_REGION: process.env.AWS_REGION,
+
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

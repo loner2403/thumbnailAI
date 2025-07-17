@@ -558,18 +558,8 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     if (!canvasRef.current || !originalDimensions) return;
     
     try {
-      // Deduct a credit before allowing download (via API route)
-      try {
-        const res = await fetch("/api/deduct-credits", { method: "POST" });
-        const data = await res.json();
-        if (!data.success) {
-          setError("Failed to deduct credits. " + (data.error || "You may not have enough credits left."));
-          return;
-        }
-      } catch (err) {
-        setError("Failed to deduct credits. Please try again.");
-        return;
-      }
+      
+      
       // Create a temporary canvas for high-resolution export
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d', {

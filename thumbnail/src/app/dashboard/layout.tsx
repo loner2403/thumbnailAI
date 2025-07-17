@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import Credits from "~/components/credits";
-import SignOut from "~/components/signout";
 import { Button } from "~/components/ui/button";
 import "~/styles/globals.css";
 import { ImageIcon, CreditCard, Home, GithubIcon, TwitterIcon, Mail, Heart } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 
 export default async function RootLayout({
   children,
@@ -31,7 +31,7 @@ export default async function RootLayout({
               </Button>
             </Link>
             <div className="rounded-full p-2 hover:bg-muted/80 transition-colors">
-              <SignOut />
+              <UserButton />
             </div>
           </div>
         </div>

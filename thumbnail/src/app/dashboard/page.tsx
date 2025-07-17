@@ -6,19 +6,11 @@ import { db } from "~/server/db";
 import DashboardClient from "./DashboardClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import Recent from "~/components/recent";
+import { env } from "process";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Page = async () => {
-    const serverSession = await auth();
-    const user = await db.user.findUnique({
-        where: {
-            id: serverSession?.user.id
-        },
-        select: {
-            credits: true,
-            name: true,
-            email: true,
-        },
-    });
+    const user = await getOrCreateUser();
 
     // Handle case when user is out of credits
     if (user?.credits === 0) {

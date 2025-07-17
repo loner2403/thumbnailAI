@@ -6,10 +6,11 @@ import { auth } from "~/server/auth";
 import AWS from "aws-sdk";
 import { env } from "~/env";
 import DownloadRecentThumbnail from "./download-recent-thumbnail";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Recent = async () => {
 
-    const serverSession = await auth();
+    const user = await getOrCreateUser();
 
     const s3 = new AWS.S3({
         accessKeyId: env.AWS_ACCESS_KEY,
@@ -18,7 +19,7 @@ const Recent = async () => {
     
     })
 
-    const prefix = `${serverSession?.user.id}/`;
+    const prefix = `${user.id}/`;
 
     const params = {
         Bucket: env.AWS_THUMBNAIL_BUCKET,

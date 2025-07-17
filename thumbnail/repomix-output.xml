@@ -54,10 +54,13 @@ src/app/actions/auth.ts
 src/app/actions/aws.ts
 src/app/actions/generate.ts
 src/app/api/auth/[...nextauth]/route.ts
+src/app/api/clerk-webhook/route.ts
+src/app/api/create-order/route.ts
 src/app/api/deduct-credits/route.ts
 src/app/dashboard/DashboardClient.tsx
 src/app/dashboard/layout.tsx
 src/app/dashboard/page.tsx
+src/app/dashboard/pricing/page.tsx
 src/app/fonts.ts
 src/app/globals.css
 src/app/layout.tsx
@@ -65,14 +68,23 @@ src/app/page.tsx
 src/app/signin/page.tsx
 src/app/signup/page.tsx
 src/components/backgroundRemoval.worker.js
+src/components/ColorSwatchPicker.tsx
 src/components/credits.tsx
 src/components/download-recent-thumbnail.tsx
 src/components/dropzone.tsx
+src/components/EditorSidebar.tsx
+src/components/EffectsTab.tsx
+src/components/FiltersTab.tsx
+src/components/Header.tsx
 src/components/LoadingScreen.tsx
+src/components/Modal.tsx
+src/components/pricing-card.tsx
 src/components/recent.tsx
 src/components/SessionProvider.tsx
 src/components/signout.tsx
 src/components/style.tsx
+src/components/StyleSelector.tsx
+src/components/TextTab.tsx
 src/components/thumbnail-creator.tsx
 src/components/ui/button.tsx
 src/components/ui/card.tsx
@@ -89,10 +101,16 @@ src/components/ui/sonner.tsx
 src/components/ui/tabs.tsx
 src/components/ui/tooltip.tsx
 src/env.js
+src/hooks/useDebounce.ts
+src/hooks/useDrag.ts
+src/hooks/useImageFilters.ts
+src/hooks/useImageProcessing.ts
+src/hooks/useTextEffects.ts
 src/lib/utils.ts
 src/middleware.ts
 src/schemas/auth.ts
 src/server/auth/config.ts
+src/server/auth/getOrCreateUser.ts
 src/server/auth/index.ts
 src/server/db.ts
 src/styles/globals.css
@@ -291,6 +309,8 @@ export default config;
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
+    "@clerk/clerk-react": "^5.34.0",
+    "@clerk/nextjs": "^6.25.0",
     "@hookform/resolvers": "^5.0.1",
     "@imgly/background-removal": "^1.6.0",
     "@prisma/client": "^6.5.0",
@@ -313,6 +333,7 @@ export default config;
     "next": "^15.2.3",
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.6",
+    "razorpay": "^2.9.6",
     "react": "^19.1.0",
     "react-best-gradient-color-picker": "^3.0.14",
     "react-dom": "^19.0.0",
@@ -370,12 +391,8 @@ generator client {
 }
 
 datasource db {
-    provider = "sqlite"
-    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-    // Further reading:
-    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Post {
@@ -390,53 +407,15 @@ model Post {
     @@index([name])
 }
 
-// Necessary for Next auth
-model Account {
-    id                       String  @id @default(cuid())
-    userId                   String
-    type                     String
-    provider                 String
-    providerAccountId        String
-    refresh_token            String? // @db.Text
-    access_token             String? // @db.Text
-    expires_at               Int?
-    token_type               String?
-    scope                    String?
-    id_token                 String? // @db.Text
-    session_state            String?
-    user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    refresh_token_expires_in Int?
-
-    @@unique([provider, providerAccountId])
-}
-
-model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 model User {
     id            String    @id @default(cuid())
     name          String?
     email         String?   @unique
     emailVerified DateTime?
     image         String?
-    accounts      Account[]
-    sessions      Session[]
     posts         Post[]
-    password      String
+    password      String?   // Now optional, Clerk handles auth
     credits       Int       @default(10)
-}
-
-model VerificationToken {
-    identifier String
-    token      String   @unique
-    expires    DateTime
-
-    @@unique([identifier, token])
 }
 </file>
 
@@ -523,9 +502,9 @@ export const signup = async (email: string, password: string) => {
 "use server"
 
 import AWS from "aws-sdk";
-import { redirect } from "next/navigation";
 import { env } from "~/env";
 import { auth } from "~/server/auth";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const s3 = new AWS.S3({
     accessKeyId: env.AWS_ACCESS_KEY,
@@ -535,17 +514,13 @@ const s3 = new AWS.S3({
 })
 
 export const getPresignedUrl = async () => {
-    const serverSession = await auth();
-
-    if(!serverSession || !serverSession.user?.id) {
-        throw new Error("User not authenticated");
-    }
+    const user = await getOrCreateUser();
 
     // Format date as yyyyMMddHHmmss
     const pad = (n: number) => n.toString().padStart(2, '0');
     const now = new Date();
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const userId = serverSession.user.id;
+    const userId = user.id;
     const key = `${userId}/thumbnail-${timestamp}.png`;
 
     const params = {
@@ -591,6 +566,7 @@ export const downloadS3File = async (url: string) => {
 import { revalidatePath } from "next/cache";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 // Simple server-side actions for thumbnail generation
 
@@ -598,17 +574,7 @@ import { db } from "~/server/db";
  * Generate action - placeholder for any server-side processing
  */
 export async function generate() {
-  const serverSession = await auth();
-
-  if (!serverSession || !serverSession.user) {
-    throw new Error("User not authenticated");
-  }
-
-  const user = await db.user.findUnique({
-    where: {
-      id: serverSession.user.id,
-    },
-  });
+  const user = await getOrCreateUser();
 
   if (!user) {
     throw new Error("User not found");
@@ -620,7 +586,7 @@ export async function generate() {
 
   await db.user.update({
     where: {
-      id: serverSession.user.id,
+      id: user.id,
     },
     data: {
       credits: {
@@ -644,6 +610,70 @@ import { authConfig } from "~/server/auth/config";
 
 export const GET = NextAuth(authConfig);
 export const POST = NextAuth(authConfig);
+</file>
+
+<file path="src/app/api/clerk-webhook/route.ts">
+import { NextResponse } from "next/server";
+import { db } from "~/server/db";
+
+export async function POST(req: Request) {
+  const payload = await req.json();
+
+  // Only handle user.created events
+  if (payload.type === "user.created") {
+    const { id, email_addresses, first_name, last_name, image_url } = payload.data;
+
+    await db.user.upsert({
+      where: { id },
+      update: {
+        email: email_addresses[0]?.email_address,
+        name: `${first_name ?? ""} ${last_name ?? ""}`.trim(),
+        image: image_url,
+      },
+      create: {
+        id,
+        email: email_addresses[0]?.email_address,
+        name: `${first_name ?? ""} ${last_name ?? ""}`.trim(),
+        image: image_url,
+        credits: 10, // default value
+        password: "", // Clerk handles auth
+      },
+    });
+  }
+
+  return NextResponse.json({ received: true });
+}
+</file>
+
+<file path="src/app/api/create-order/route.ts">
+import { NextRequest, NextResponse } from "next/server";
+import Razorpay from "razorpay";
+
+export async function POST(req: NextRequest) {
+  const { amount } = await req.json();
+
+  if (!amount) {
+    return NextResponse.json({ error: "Amount is required" }, { status: 400 });
+  }
+
+  const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID!,
+    key_secret: process.env.RAZORPAY_KEY_SECRET!,
+  });
+
+  const options = {
+    amount: amount * 100, // amount in paise
+    currency: "INR",
+    receipt: `receipt_order_${Date.now()}`,
+  };
+
+  try {
+    const order = await razorpay.orders.create(options);
+    return NextResponse.json(order);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 </file>
 
 <file path="src/app/api/deduct-credits/route.ts">
@@ -699,10 +729,10 @@ export default function DashboardClient() {
 
 import Link from "next/link";
 import Credits from "~/components/credits";
-import SignOut from "~/components/signout";
 import { Button } from "~/components/ui/button";
 import "~/styles/globals.css";
 import { ImageIcon, CreditCard, Home, GithubIcon, TwitterIcon, Mail, Heart } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 
 export default async function RootLayout({
   children,
@@ -728,7 +758,7 @@ export default async function RootLayout({
               </Button>
             </Link>
             <div className="rounded-full p-2 hover:bg-muted/80 transition-colors">
-              <SignOut />
+              <UserButton />
             </div>
           </div>
         </div>
@@ -850,19 +880,11 @@ import { db } from "~/server/db";
 import DashboardClient from "./DashboardClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import Recent from "~/components/recent";
+import { env } from "process";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Page = async () => {
-    const serverSession = await auth();
-    const user = await db.user.findUnique({
-        where: {
-            id: serverSession?.user.id
-        },
-        select: {
-            credits: true,
-            name: true,
-            email: true,
-        },
-    });
+    const user = await getOrCreateUser();
 
     // Handle case when user is out of credits
     if (user?.credits === 0) {
@@ -914,6 +936,34 @@ const Page = async () => {
 };
 
 export default Page;
+</file>
+
+<file path="src/app/dashboard/pricing/page.tsx">
+"use client"
+
+import Link from "next/link";
+import { IoMdArrowBack } from "react-icons/io";
+import PricingCard from "~/components/pricing-card";
+
+
+const page = async () => {
+
+    return <div className="flex w-full items-center justify-center md:h-full">
+       <div className="flex flex-col gap-4">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <IoMdArrowBack className="h-4 w-4" />
+          <p className="leading-7">Go back</p>
+        </Link>
+        <div className="flex flex-col gap-4 md:flex-row">
+            <PricingCard pricing="$10" credits="10" />
+            <PricingCard pricing="$20" credits="30" />
+            <PricingCard pricing="$50" credits="100" />
+        </div>
+       </div>
+    </div>
+}
+
+export default page;
 </file>
 
 <file path="src/app/fonts.ts">
@@ -1028,6 +1078,8 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "~/components/ui/sonner";
 import { SessionProvider } from "~/components/SessionProvider";
+import { ClerkProvider, SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import Header from "~/components/Header";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -1042,20 +1094,18 @@ const geist = Geist({
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
-      <body>
-        <SessionProvider>
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <Header />
           {children}
-        </SessionProvider>
-        <Toaster 
-          expand={true}
-          richColors={true}
-          closeButton={true}
-        />
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
 </file>
@@ -1105,52 +1155,24 @@ export default function HomePage() {
 </file>
 
 <file path="src/app/signin/page.tsx">
-import { redirect } from "next/navigation";
-import SignIn from "~/components/ui/signin";
-import { auth } from "~/server/auth";
+import { SignIn } from "@clerk/nextjs";
 
-export const metadata = {
-  title: "Sign In",
-  description: "Sign in to your account",
-}
-
-export default async function SignInPage() {
-  const session = await auth();
-
-  // Redirect to dashboard if user is already logged in
-  if (session?.user) {
-    redirect("/dashboard");
-  }
-
+export default function SignInPage() {
   return (
-    <div className="container mx-auto py-10">
-      <SignIn />
+    <div className="flex justify-center items-center min-h-screen">
+      <SignIn forceRedirectUrl="/dashboard" />
     </div>
   );
 }
 </file>
 
 <file path="src/app/signup/page.tsx">
-import { redirect } from "next/navigation";
-import SignUp from "~/components/ui/signup";
-import { auth } from "~/server/auth";
+import { SignUp } from "@clerk/nextjs";
 
-export const metadata = {
-  title: "Sign Up",
-  description: "Sign up for an account",
-}
-
-export default async function SignUpPage() {
-  const session = await auth();
-
-  // Redirect to dashboard if user is already logged in
-  if (session?.user) {
-    redirect("/dashboard");
-  }
-
+export default function SignUpPage() {
   return (
-    <div className="container mx-auto py-10">
-      <SignUp />
+    <div className="flex justify-center items-center min-h-screen">
+      <SignUp forceRedirectUrl= "/dashboard"/>
     </div>
   );
 }
@@ -1183,33 +1205,73 @@ self.onmessage = async (e) => {
 };
 </file>
 
+<file path="src/components/ColorSwatchPicker.tsx">
+import React from "react";
+import { Label } from "./ui/label";
+import { Input } from "./ui/input";
+
+const colorSwatches = [
+  "#ff0000", "#ff4000", "#ff8000", "#ffbf00", "#ffff00", "#bfff00",
+  "#80ff00", "#40ff00", "#00ff00", "#00ff40", "#00ff80", "#00ffbf",
+  "#00ffff", "#00bfff", "#0080ff", "#0040ff", "#0000ff", "#4000ff",
+  "#8000ff", "#bf00ff", "#ff00ff", "#ff00bf", "#ff0080", "#ff0040",
+  "#000000", "#404040", "#808080", "#bfbfbf", "#ffffff", "#ffcccc",
+  "#ccffcc", "#ccccff", "#ffffcc", "#ffccff", "#ccffff", "#ffddcc"
+];
+
+interface ColorSwatchPickerProps {
+  value: string;
+  onChange: (color: string) => void;
+  label: string;
+}
+
+const ColorSwatchPicker: React.FC<ColorSwatchPickerProps> = ({ value, onChange, label }) => (
+  <div className="space-y-2">
+    <Label className="text-sm">{label}</Label>
+    <div className="flex items-center gap-2 mb-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-12 rounded border border-gray-300 cursor-pointer"
+      />
+      <Input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 text-xs flex-1"
+        placeholder="#000000"
+      />
+    </div>
+    <div className="grid grid-cols-6 gap-1">
+      {colorSwatches.map((color, index) => (
+        <button
+          key={index}
+          className="h-6 w-6 rounded border border-gray-200 hover:border-gray-400 transition-colors"
+          style={{ backgroundColor: color }}
+          onClick={() => onChange(color)}
+          title={color}
+        />
+      ))}
+    </div>
+  </div>
+);
+
+export default ColorSwatchPicker;
+</file>
+
 <file path="src/components/credits.tsx">
 "use server"
 
 import { CreditCard } from "lucide-react"
-import { auth } from "~/server/auth"
-import { db } from "~/server/db"
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Credits = async () => {
     try {
-        const session = await auth()
-        
-        if (!session?.user?.email) {
-            return <span className="flex items-center text-muted-foreground text-sm">Sign in to view credits</span>
-        }
-        
-        // Get the full user record to ensure we get all fields
-        const user = await db.user.findUnique({
-            where: {
-                email: session.user.email
-            }
-        });
-            
+        const user = await getOrCreateUser();
         if (!user) {
-            console.error("User not found for email:", session.user.email)
-            return <span className="text-sm text-destructive">User not found</span>
+            return <span className="text-sm text-destructive">User not found</span>;
         }
-        
         // Show different styles based on credit amount
         const creditsLeft = user.credits;
         const getColorClass = () => {
@@ -1217,8 +1279,6 @@ const Credits = async () => {
             if (creditsLeft <= 2) return "text-amber-500";
             return "text-emerald-500";
         };
-        
-        // Access the credits field directly from the user object
         return (
             <span className="flex items-center gap-1.5">
                 <CreditCard className={`h-3.5 w-3.5 ${getColorClass()}`} />
@@ -1229,7 +1289,7 @@ const Credits = async () => {
         );
     } catch (error) {
         console.error("Error in Credits component:", error)
-        return <span className="text-sm text-destructive">Error loading credits</span>
+        return <span className="text-sm text-destructive">Error loading credits</span>;
     }
 };
 
@@ -1362,6 +1422,555 @@ const Dropzone: React.FC<DropzoneProps> = ({ onFileAccepted, setSelectedImage })
 };
 
 export default Dropzone;
+</file>
+
+<file path="src/components/EditorSidebar.tsx">
+import React from "react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Sliders, Type, Image as LucideImage } from "lucide-react";
+import TextTab from "./TextTab";
+import EffectsTab from "./EffectsTab";
+import FiltersTab from "./FiltersTab";
+import { Button } from "./ui/button";
+
+interface EditorSidebarProps {
+  // Text tab
+  text: string;
+  setText: (t: string) => void;
+  textSize: number;
+  setTextSize: (n: number) => void;
+  font: string;
+  setFont: (f: string) => void;
+  // Effects tab
+  textShadow: boolean;
+  setTextShadow: (b: boolean) => void;
+  shadowBlur: number;
+  setShadowBlur: (n: number) => void;
+  shadowColor: string;
+  setShadowColor: (c: string) => void;
+  textOutline: boolean;
+  setTextOutline: (b: boolean) => void;
+  outlineWidth: number;
+  setOutlineWidth: (n: number) => void;
+  outlineColor: string;
+  setOutlineColor: (c: string) => void;
+  useGradient: boolean;
+  setUseGradient: (b: boolean) => void;
+  gradientColor1: string;
+  setGradientColor1: (c: string) => void;
+  gradientColor2: string;
+  setGradientColor2: (c: string) => void;
+  gradientDirection: number;
+  setGradientDirection: (n: number) => void;
+  textOpacity: number;
+  setTextOpacity: (n: number) => void;
+  // Filters tab
+  selectedFilter: string;
+  setSelectedFilter: (f: string) => void;
+  filterIntensity: number;
+  setFilterIntensity: (n: number) => void;
+  filterBrightness: number;
+  setFilterBrightness: (n: number) => void;
+  filterContrast: number;
+  setFilterContrast: (n: number) => void;
+  filterSaturation: number;
+  setFilterSaturation: (n: number) => void;
+  // Actions
+  onDownload: () => void;
+  onUpdate: () => void;
+  error: string | null;
+  onDismissError: () => void;
+}
+
+const EditorSidebar: React.FC<EditorSidebarProps> = (props) => {
+  return (
+    <Card className="w-full md:w-[25%] max-h-[80vh] border-none shadow-md bg-background/80 backdrop-blur-sm flex flex-col">
+      <CardHeader className="pb-3 px-5">
+        <CardTitle className="text-lg font-medium flex items-center gap-2">
+          <Sliders className="h-4 w-4 text-primary" />
+          Edit Thumbnail
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 flex-1 overflow-y-auto">
+        <Tabs defaultValue="text" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
+              <Type className="h-3.5 w-3.5" />
+              <span>Text</span>
+            </TabsTrigger>
+            <TabsTrigger value="effects" className="flex items-center gap-1.5 text-xs">
+              <Type className="h-3.5 w-3.5" />
+              <span>Text Effects</span>
+            </TabsTrigger>
+            <TabsTrigger value="filters" className="flex items-center gap-1.5 text-xs">
+              <LucideImage className="h-3.5 w-3.5" />
+              <span>Image Filters</span>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="text">
+            <TextTab
+              text={props.text}
+              setText={props.setText}
+              textSize={props.textSize}
+              setTextSize={props.setTextSize}
+              font={props.font}
+              setFont={props.setFont}
+            />
+          </TabsContent>
+          <TabsContent value="effects">
+            <EffectsTab
+              textShadow={props.textShadow}
+              setTextShadow={props.setTextShadow}
+              shadowBlur={props.shadowBlur}
+              setShadowBlur={props.setShadowBlur}
+              shadowColor={props.shadowColor}
+              setShadowColor={props.setShadowColor}
+              textOutline={props.textOutline}
+              setTextOutline={props.setTextOutline}
+              outlineWidth={props.outlineWidth}
+              setOutlineWidth={props.setOutlineWidth}
+              outlineColor={props.outlineColor}
+              setOutlineColor={props.setOutlineColor}
+              useGradient={props.useGradient}
+              setUseGradient={props.setUseGradient}
+              gradientColor1={props.gradientColor1}
+              setGradientColor1={props.setGradientColor1}
+              gradientColor2={props.gradientColor2}
+              setGradientColor2={props.setGradientColor2}
+              gradientDirection={props.gradientDirection}
+              setGradientDirection={props.setGradientDirection}
+              textOpacity={props.textOpacity}
+              setTextOpacity={props.setTextOpacity}
+            />
+          </TabsContent>
+          <TabsContent value="filters">
+            <FiltersTab
+              selectedFilter={props.selectedFilter}
+              setSelectedFilter={props.setSelectedFilter}
+              filterIntensity={props.filterIntensity}
+              setFilterIntensity={props.setFilterIntensity}
+              filterBrightness={props.filterBrightness}
+              setFilterBrightness={props.setFilterBrightness}
+              filterContrast={props.filterContrast}
+              setFilterContrast={props.setFilterContrast}
+              filterSaturation={props.filterSaturation}
+              setFilterSaturation={props.setFilterSaturation}
+            />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+      <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
+        <Button onClick={props.onDownload} className="gap-1.5 bg-primary/90 hover:bg-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </Button>
+        <Button onClick={props.onUpdate} className="gap-1.5 bg-muted/80 hover:bg-muted text-foreground">
+          <Sliders className="h-4 w-4" />
+          Update
+        </Button>
+      </CardFooter>
+      {props.error && (
+        <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+          <p className="text-red-800 text-sm">{props.error}</p>
+          <Button 
+            onClick={props.onDismissError} 
+            className="mt-2 text-xs"
+            variant="outline"
+            size="sm"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export default EditorSidebar;
+</file>
+
+<file path="src/components/EffectsTab.tsx">
+import React from "react";
+import { Label } from "./ui/label";
+import { Slider } from "./ui/slider";
+import ColorSwatchPicker from "./ColorSwatchPicker";
+import { gradientPresets, directionPresets } from "../lib/utils";
+
+interface EffectsTabProps {
+  textShadow: boolean;
+  setTextShadow: (b: boolean) => void;
+  shadowBlur: number;
+  setShadowBlur: (n: number) => void;
+  shadowColor: string;
+  setShadowColor: (c: string) => void;
+  textOutline: boolean;
+  setTextOutline: (b: boolean) => void;
+  outlineWidth: number;
+  setOutlineWidth: (n: number) => void;
+  outlineColor: string;
+  setOutlineColor: (c: string) => void;
+  useGradient: boolean;
+  setUseGradient: (b: boolean) => void;
+  gradientColor1: string;
+  setGradientColor1: (c: string) => void;
+  gradientColor2: string;
+  setGradientColor2: (c: string) => void;
+  gradientDirection: number;
+  setGradientDirection: (n: number) => void;
+  textOpacity: number;
+  setTextOpacity: (n: number) => void;
+}
+
+const EffectsTab: React.FC<EffectsTabProps> = (props) => {
+  const {
+    textShadow, setTextShadow, shadowBlur, setShadowBlur, shadowColor, setShadowColor,
+    textOutline, setTextOutline, outlineWidth, setOutlineWidth, outlineColor, setOutlineColor,
+    useGradient, setUseGradient, gradientColor1, setGradientColor1, gradientColor2, setGradientColor2,
+    gradientDirection, setGradientDirection, textOpacity, setTextOpacity
+  } = props;
+
+  return (
+    <div className="space-y-4 mt-4">
+      {/* Text Shadow Controls */}
+      <div className="rounded-lg border p-3">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="shadow-toggle" className="font-medium">Text Shadow</Label>
+          <input 
+            type="checkbox" 
+            id="shadow-toggle"
+            checked={textShadow}
+            onChange={(e) => setTextShadow(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+        </div>
+        {textShadow && (
+          <div className="mt-3 space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="shadow-blur" className="text-sm">Blur</Label>
+                <span className="text-xs text-muted-foreground">{shadowBlur}px</span>
+              </div>
+              <Slider 
+                id="shadow-blur"
+                min={0} 
+                max={20} 
+                step={1}
+                value={[shadowBlur]}
+                onValueChange={(value: number[]) => {
+                  if (value[0] !== undefined) {
+                    setShadowBlur(value[0]);
+                  }
+                }}
+              />
+            </div>
+            <ColorSwatchPicker
+              value={shadowColor}
+              onChange={setShadowColor}
+              label="Shadow Color"
+            />
+          </div>
+        )}
+      </div>
+      {/* Text Outline Controls */}
+      <div className="rounded-lg border p-3">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="outline-toggle" className="font-medium">Text Outline</Label>
+          <input 
+            type="checkbox" 
+            id="outline-toggle"
+            checked={textOutline}
+            onChange={(e) => setTextOutline(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+        </div>
+        {textOutline && (
+          <div className="mt-3 space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="outline-width" className="text-sm">Width</Label>
+                <span className="text-xs text-muted-foreground">{outlineWidth}px</span>
+              </div>
+              <Slider 
+                id="outline-width"
+                min={1} 
+                max={10} 
+                step={1}
+                value={[outlineWidth]}
+                onValueChange={(value: number[]) => {
+                  if (value[0] !== undefined) {
+                    setOutlineWidth(value[0]);
+                  }
+                }}
+              />
+            </div>
+            <ColorSwatchPicker
+              value={outlineColor}
+              onChange={setOutlineColor}
+              label="Outline Color"
+            />
+          </div>
+        )}
+      </div>
+      {/* Enhanced Text Gradient Controls with Opacity */}
+      <div className="rounded-lg border p-3">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
+          <input 
+            type="checkbox" 
+            id="gradient-toggle"
+            checked={useGradient}
+            onChange={(e) => setUseGradient(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+        </div>
+        {useGradient && (
+          <div className="mt-3 space-y-4">
+            {/* Gradient Presets */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Quick Presets</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {gradientPresets.map((preset, index) => (
+                  <button
+                    key={index}
+                    className="h-8 rounded border border-gray-200 hover:border-gray-400 transition-colors relative overflow-hidden"
+                    style={{ background: `linear-gradient(90deg, ${preset.colors[0]}, ${preset.colors[1]})` }}
+                    onClick={() => {
+                      setGradientColor1(preset.colors[0] ?? "#000000");
+                      setGradientColor2(preset.colors[1] ?? "#ffffff");
+                    }}
+                    title={preset.name}
+                  >
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
+                      {preset.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Gradient Direction */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Gradient Direction</Label>
+              <div className="grid grid-cols-4 gap-1">
+                {directionPresets.map((preset, index) => (
+                  <button
+                    key={index}
+                    className={`h-8 text-lg border rounded transition-colors ${
+                      gradientDirection === preset.angle 
+                        ? 'border-primary bg-primary/10 text-primary' 
+                        : 'border-gray-200 hover:border-gray-400'
+                    }`}
+                    onClick={() => setGradientDirection(preset.angle)}
+                    title={preset.desc}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Color Pickers */}
+            <div className="grid grid-cols-2 gap-3">
+              <ColorSwatchPicker
+                value={gradientColor1}
+                onChange={setGradientColor1}
+                label="Color 1"
+              />
+              <ColorSwatchPicker
+                value={gradientColor2}
+                onChange={setGradientColor2}
+                label="Color 2"
+              />
+            </div>
+            {/* Text Opacity Control */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="text-opacity" className="text-sm font-medium">Text Opacity</Label>
+                <span className="text-xs text-muted-foreground">{textOpacity}%</span>
+              </div>
+              <Slider 
+                id="text-opacity"
+                min={0} 
+                max={100} 
+                step={1}
+                value={[textOpacity]}
+                onValueChange={(value: number[]) => {
+                  if (value[0] !== undefined) {
+                    setTextOpacity(value[0]);
+                  }
+                }}
+              />
+            </div>
+            {/* Live Preview with Opacity */}
+            <div className="space-y-2">
+              <Label className="text-sm">Preview</Label>
+              <div className="h-8 w-full rounded-md border border-gray-200 relative overflow-hidden bg-gray-100">
+                <div
+                  className="absolute inset-0"
+                  style={{ 
+                    background: `linear-gradient(${gradientDirection}deg, ${gradientColor1}, ${gradientColor2})`,
+                    opacity: textOpacity / 100
+                  }} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EffectsTab;
+</file>
+
+<file path="src/components/FiltersTab.tsx">
+import React from "react";
+import { Label } from "./ui/label";
+import { Slider } from "./ui/slider";
+import { imageFilters } from "../lib/utils";
+
+interface FiltersTabProps {
+  selectedFilter: string;
+  setSelectedFilter: (f: string) => void;
+  filterIntensity: number;
+  setFilterIntensity: (n: number) => void;
+  filterBrightness: number;
+  setFilterBrightness: (n: number) => void;
+  filterContrast: number;
+  setFilterContrast: (n: number) => void;
+  filterSaturation: number;
+  setFilterSaturation: (n: number) => void;
+}
+
+const FiltersTab: React.FC<FiltersTabProps> = ({
+  selectedFilter, setSelectedFilter,
+  filterIntensity, setFilterIntensity,
+  filterBrightness, setFilterBrightness,
+  filterContrast, setFilterContrast,
+  filterSaturation, setFilterSaturation
+}) => (
+  <div className="space-y-4 mt-4">
+    <div className="space-y-3">
+      <Label htmlFor="filter-preset" className="font-medium">Filter Preset</Label>
+      <div className="grid grid-cols-4 gap-2">
+        {Object.entries(imageFilters).map(([key, filter]) => (
+          <button
+            key={key}
+            className={`p-1 rounded-md text-xs border transition-colors ${
+              selectedFilter === key 
+                ? 'border-primary ring-1 ring-primary bg-primary/5' 
+                : 'border-border hover:border-gray-400'
+            }`}
+            onClick={() => setSelectedFilter(key)}
+          >
+            {filter.name}
+          </button>
+        ))}
+      </div>
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="brightness" className="text-sm">Brightness</Label>
+        <span className="text-xs text-muted-foreground">{filterBrightness}%</span>
+      </div>
+      <Slider 
+        id="brightness"
+        min={50} 
+        max={150} 
+        step={1}
+        value={[filterBrightness]}
+        onValueChange={(value: number[]) => {
+          if (value[0] !== undefined) {
+            setFilterBrightness(value[0]);
+          }
+        }}
+      />
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="contrast" className="text-sm">Contrast</Label>
+        <span className="text-xs text-muted-foreground">{filterContrast}%</span>
+      </div>
+      <Slider 
+        id="contrast"
+        min={50} 
+        max={150} 
+        step={1}
+        value={[filterContrast]}
+        onValueChange={(value: number[]) => {
+          if (value[0] !== undefined) {
+            setFilterContrast(value[0]);
+          }
+        }}
+      />
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="saturation" className="text-sm">Saturation</Label>
+        <span className="text-xs text-muted-foreground">{filterSaturation}%</span>
+      </div>
+      <Slider 
+        id="saturation"
+        min={0} 
+        max={200} 
+        step={1}
+        value={[filterSaturation]}
+        onValueChange={(value: number[]) => {
+          if (value[0] !== undefined) {
+            setFilterSaturation(value[0]);
+          }
+        }}
+      />
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="intensity" className="text-sm">Effect Intensity</Label>
+        <span className="text-xs text-muted-foreground">{filterIntensity}%</span>
+      </div>
+      <Slider 
+        id="intensity"
+        min={0} 
+        max={100} 
+        step={1}
+        value={[filterIntensity]}
+        onValueChange={(value: number[]) => {
+          if (value[0] !== undefined) {
+            setFilterIntensity(value[0]);
+          }
+        }}
+      />
+    </div>
+  </div>
+);
+
+export default FiltersTab;
+</file>
+
+<file path="src/components/Header.tsx">
+"use client";
+
+import { ClerkProvider, SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
+
+export default function Header() {
+  const pathname = usePathname();
+  const isDashboard = pathname.startsWith("/dashboard");
+  return (
+    <header>
+      <SignedOut>
+        <SignInButton />
+        <SignUpButton />
+      </SignedOut>
+      <SignedIn>
+        {!isDashboard && <UserButton />}
+      </SignedIn>
+    </header>
+  );
+}
 </file>
 
 <file path="src/components/LoadingScreen.tsx">
@@ -1535,6 +2144,139 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
 export default LoadingScreen;
 </file>
 
+<file path="src/components/Modal.tsx">
+import React from "react";
+import ReactDOM from "react-dom";
+
+interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
+  if (!open) return null;
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close modal overlay"
+      />
+      {/* Modal content */}
+      <div
+        className="relative bg-background rounded-2xl shadow-2xl flex flex-col w-[95vw] h-[95vh] max-w-[95vw] max-h-[95vh] overflow-hidden border border-border animate-in fade-in zoom-in-95"
+        style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center cursor-pointer rounded-full bg-muted/80 hover:bg-muted transition-colors shadow-sm"
+          aria-label="Close modal"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <div className="flex-1 flex flex-col overflow-auto">{children}</div>
+      </div>
+    </div>,
+    typeof window !== "undefined" ? document.body : (null as any)
+  );
+};
+
+export default Modal;
+</file>
+
+<file path="src/components/pricing-card.tsx">
+import { IoIosCheckmarkCircleOutline } from "react-icons/io";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
+import { useEffect } from "react";
+
+const PricingCard = ({
+    pricing, 
+    credits
+} : {
+    pricing: string;
+    credits: string;
+}) => {
+    useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
+
+    const handleBuyNow = async () => {
+        // Convert credits to number and calculate amount (e.g., 1 credit = 10 INR)
+        const amount = Number(credits) * 10;
+        // 1. Create order on backend
+        const res = await fetch("/api/create-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount }),
+        });
+        const order = await res.json();
+        if (!order.id) {
+            alert(order.error || "Failed to create order");
+            return;
+        }
+        // 2. Open Razorpay checkout
+        const options = {
+            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+            amount: order.amount,
+            currency: order.currency,
+            name: "Thumbnail App",
+            description: `Purchase ${credits} credits` ,
+            order_id: order.id,
+            handler: function (response: any) {
+                // TODO: You should verify payment on the backend here
+                alert("Payment successful! Payment ID: " + response.razorpay_payment_id);
+            },
+            prefill: {
+                email: "user@example.com",
+                contact: "9999999999",
+            },
+            theme: { color: "#3399cc" },
+        };
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+    };
+    return <Card className="h-fit w-60">
+    <CardHeader>
+        <CardTitle>
+            <div className="flex items-end gap-2">
+                <p>{pricing}</p>
+                <p className="text-sm font-normal">/ one time</p>
+            </div>
+        </CardTitle>
+        <CardDescription>A pack of {credits} credits</CardDescription>
+    </CardHeader>
+    <CardContent className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+            <IoIosCheckmarkCircleOutline className="h-4 w-4 " />
+            <p>{credits} credits</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <IoIosCheckmarkCircleOutline className="h-4 w-4 " />
+            <p>1 credits = 1 thumbnail</p>
+        </div>
+
+    </CardContent>
+    <CardFooter>
+        <Button onClick={handleBuyNow} className="mt-6 w-full">Buy now</Button>
+    </CardFooter>
+</Card>
+}
+
+export default PricingCard;
+</file>
+
 <file path="src/components/recent.tsx">
 "use server"
 
@@ -1544,10 +2286,11 @@ import { auth } from "~/server/auth";
 import AWS from "aws-sdk";
 import { env } from "~/env";
 import DownloadRecentThumbnail from "./download-recent-thumbnail";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Recent = async () => {
 
-    const serverSession = await auth();
+    const user = await getOrCreateUser();
 
     const s3 = new AWS.S3({
         accessKeyId: env.AWS_ACCESS_KEY,
@@ -1556,7 +2299,7 @@ const Recent = async () => {
     
     })
 
-    const prefix = `${serverSession?.user.id}/`;
+    const prefix = `${user.id}/`;
 
     const params = {
         Bucket: env.AWS_THUMBNAIL_BUCKET,
@@ -1749,171 +2492,126 @@ const Style = ({
 export default Style;
 </file>
 
+<file path="src/components/StyleSelector.tsx">
+import React from "react";
+import Style from "./style";
+
+interface StyleSelectorProps {
+  selectedStyle: string;
+  onSelect: (style: string) => void;
+}
+
+const StyleSelector: React.FC<StyleSelectorProps> = ({ selectedStyle, onSelect }) => (
+  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
+    <Style
+      image="/style1.png"
+      selectStyle={() => onSelect("style1")}
+      isSelected={selectedStyle === "style1"}
+    />
+    <Style
+      image="/style2.png"
+      selectStyle={() => onSelect("style2")}
+      isSelected={selectedStyle === "style2"}
+    />
+    <Style
+      image="/style3.png"
+      selectStyle={() => onSelect("style3")}
+      isSelected={selectedStyle === "style3"}
+    />
+  </div>
+);
+
+export default StyleSelector;
+</file>
+
+<file path="src/components/TextTab.tsx">
+import React from "react";
+import { Label } from "./ui/label";
+import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Slider } from "./ui/slider";
+import { FONT_OPTIONS } from "../lib/utils";
+
+interface TextTabProps {
+  text: string;
+  setText: (t: string) => void;
+  textSize: number;
+  setTextSize: (n: number) => void;
+  font: string;
+  setFont: (f: string) => void;
+}
+
+const TextTab: React.FC<TextTabProps> = ({ text, setText, textSize, setTextSize, font, setFont }) => (
+  <div className="space-y-5">
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
+      <Input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        id="text"
+        placeholder="Enter text for your thumbnail"
+        className="h-10"
+      />
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="text-size" className="text-sm">Text Size</Label>
+        <span className="text-xs text-muted-foreground">{textSize}px</span>
+      </div>
+      <Slider 
+        id="text-size"
+        min={20} 
+        max={400} 
+        step={1}
+        value={[textSize]}
+        onValueChange={(value: number[]) => {
+          if (value[0] !== undefined) {
+            setTextSize(value[0]);
+          }
+        }}
+      />
+    </div>
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
+      <Select
+        value={font}
+        onValueChange={setFont}
+      >
+        <SelectTrigger id="font" className="h-10 w-full">
+          <SelectValue placeholder="Select a font" />
+        </SelectTrigger>
+        <SelectContent position="popper">
+          {FONT_OPTIONS.map(opt => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+);
+
+export default TextTab;
+</file>
+
 <file path="src/components/thumbnail-creator.tsx">
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Dropzone from "./dropzone";
-import Style from "./style";
-import { removeBackground } from "@imgly/background-removal";
-import { Button } from "./ui/button";
-import { IoMdArrowBack } from "react-icons/io";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import { Label } from "./ui/label";
-import { Input } from "./ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { inter, domine } from "../app/fonts";
-import { generate, refresh } from "~/app/actions/generate";
-import { Type, Image as LucideImage, Sliders } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Slider } from "~/components/ui/slider";
+import { refresh } from "~/app/actions/generate";
 import LoadingScreen from "./LoadingScreen";
-import { blob } from "stream/consumers";
 import { getPresignedUrl } from "~/app/actions/aws";
-import ReactDOM from "react-dom";
-
-// Type for canvas context
-type CanvasContextType = CanvasRenderingContext2D;
-
-const presets = {
-  style1: {
-    fontSize: 100,
-    fontWeight: "bold",
-    color: "rgba(255, 255, 255, 1)",
-    opacity: 1,
-  },
-  style2: {
-    fontSize: 100,
-    fontWeight: "bold",
-    color: "rgba(0, 0, 0, 1)",
-    opacity: 1,
-  },
-  style3: {
-    fontSize: 100,
-    fontWeight: "bold",
-    color: "rgba(255, 255, 255, 0.8)",
-    opacity: 0.8,
-  },
-};
-
-// Image filter presets
-const imageFilters = {
-  none: { name: "None", filter: "" },
-  grayscale: { name: "B&W", filter: "grayscale(100%)" },
-  sepia: { name: "Sepia", filter: "sepia(100%)" },
-  invert: { name: "Invert", filter: "invert(100%)" },
-  contrast: { name: "High Contrast", filter: "contrast(150%)" },
-  brightness: { name: "Bright", filter: "brightness(130%)" },
-  blur: { name: "Soft Focus", filter: "blur(2px)" },
-  saturate: { name: "Vibrant", filter: "saturate(200%)" },
-};
-
-// Gradient presets for easy selection
-const gradientPresets = [
-  { name: "Sunset", colors: ["#ff7e5f", "#feb47b"] },
-  { name: "Ocean", colors: ["#2196f3", "#21cbf3"] },
-  { name: "Purple", colors: ["#667eea", "#764ba2"] },
-  { name: "Green", colors: ["#11998e", "#38ef7d"] },
-  { name: "Pink", colors: ["#ff9a9e", "#fecfef"] },
-  { name: "Gold", colors: ["#ffecd2", "#fcb69f"] },
-  { name: "Fire", colors: ["#ff416c", "#ff4b2b"] },
-  { name: "Sky", colors: ["#a8edea", "#fed6e3"] },
-  { name: "Night", colors: ["#0c0c0c", "#654ea3"] },
-  { name: "Autumn", colors: ["#f79d00", "#64f38c"] },
-  { name: "Cool", colors: ["#2196f3", "#9c27b0"] },
-  { name: "Warm", colors: ["#ff5722", "#ffc107"] },
-];
-
-// Color swatches for quick selection
-const colorSwatches = [
-  "#ff0000", "#ff4000", "#ff8000", "#ffbf00", "#ffff00", "#bfff00",
-  "#80ff00", "#40ff00", "#00ff00", "#00ff40", "#00ff80", "#00ffbf",
-  "#00ffff", "#00bfff", "#0080ff", "#0040ff", "#0000ff", "#4000ff",
-  "#8000ff", "#bf00ff", "#ff00ff", "#ff00bf", "#ff0080", "#ff0040",
-  "#000000", "#404040", "#808080", "#bfbfbf", "#ffffff", "#ffcccc",
-  "#ccffcc", "#ccccff", "#ffffcc", "#ffccff", "#ccffff", "#ffddcc"
-];
-
-// Gradient direction presets
-const directionPresets = [
-  { name: "→", angle: 90, desc: "Left to Right" },
-  { name: "←", angle: 270, desc: "Right to Left" },
-  { name: "↓", angle: 180, desc: "Top to Bottom" },
-  { name: "↑", angle: 0, desc: "Bottom to Top" },
-  { name: "↘", angle: 135, desc: "Diagonal Down" },
-  { name: "↙", angle: 225, desc: "Diagonal Left" },
-  { name: "↖", angle: 315, desc: "Diagonal Up" },
-  { name: "↗", angle: 45, desc: "Diagonal Right" },
-];
-
-const FONT_OPTIONS = [
-  { label: "Arial", value: "arial", css: "Arial, sans-serif" },
-  { label: "Inter", value: "inter", css: `${inter.style.fontFamily}, Arial, sans-serif` },
-  { label: "Domine", value: "domine", css: `${domine.style.fontFamily}, Georgia, serif` },
-  { label: "Roboto", value: "roboto", css: 'Roboto, Arial, sans-serif' },
-  { label: "Lato", value: "lato", css: 'Lato, Arial, sans-serif' },
-  { label: "Montserrat", value: "montserrat", css: 'Montserrat, Arial, sans-serif' },
-  { label: "Oswald", value: "oswald", css: 'Oswald, Arial, sans-serif' },
-  { label: "Playfair Display", value: "playfair", css: 'Playfair Display, Georgia, serif' },
-];
+import Modal from "./Modal";
+import useDebounce from "../hooks/useDebounce";
+import { presets, imageFilters, FONT_OPTIONS } from "../lib/utils";
+import StyleSelector from "./StyleSelector";
+import EditorSidebar from "./EditorSidebar";
+import useTextEffects from "../hooks/useTextEffects";
+import useImageFilters from "../hooks/useImageFilters";
 
 interface ThumbnailCreatorProps {
   children?: React.ReactNode;
 }
-
-// Debounce utility
-const debounce = (func: Function, wait: number) => {
-  let timeout: NodeJS.Timeout;
-  return (...args: any[]) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-};
-
-// Modal component
-const Modal = ({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) => {
-  if (!open) return null;
-  return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-label="Close modal overlay"
-      />
-      {/* Modal content */}
-      <div
-        className="relative bg-background rounded-2xl shadow-2xl flex flex-col w-[95vw] h-[95vh] max-w-[95vw] max-h-[95vh] overflow-hidden border border-border animate-in fade-in zoom-in-95"
-        style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
-      >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center cursor-pointer rounded-full bg-muted/80 hover:bg-muted transition-colors shadow-sm"
-          aria-label="Close modal"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <div className="flex-1 flex flex-col overflow-auto">{children}</div>
-      </div>
-    </div>,
-    typeof window !== "undefined" ? document.body : (null as any)
-  );
-};
 
 const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [selectedStyle, setSelectedStyle] = useState("style1");
@@ -1935,31 +2633,14 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const imageObjectsRef = useRef<HTMLImageElement[]>([]);
   const fileReaderRef = useRef<FileReader | null>(null);
 
-  // Advanced text effects states
-  const [textShadow, setTextShadow] = useState(false);
-  const [shadowBlur, setShadowBlur] = useState(5);
-  const [shadowColor, setShadowColor] = useState("rgba(0, 0, 0, 0.7)");
-  const [textOutline, setTextOutline] = useState(false);
-  const [outlineWidth, setOutlineWidth] = useState(2);
-  const [outlineColor, setOutlineColor] = useState("#000000");
-  const [useGradient, setUseGradient] = useState(false);
-  const [gradientColor1, setGradientColor1] = useState("#ff0000");
-  const [gradientColor2, setGradientColor2] = useState("#0000ff");
-  const [gradientDirection, setGradientDirection] = useState(90);
-  const [textOpacity, setTextOpacity] = useState(100);
-  
-  // Image filter states
-  const [selectedFilter, setSelectedFilter] = useState("none");
-  const [filterIntensity, setFilterIntensity] = useState(100);
-  const [filterBrightness, setFilterBrightness] = useState(100);
-  const [filterContrast, setFilterContrast] = useState(100);
-  const [filterSaturation, setFilterSaturation] = useState(100);
-
   // Text position and dragging states
   const [textPosition, setTextPosition] = useState({ x: 0.5, y: 0.5 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  const { state: textEffects, dispatch: dispatchTextEffects } = useTextEffects();
+  const { state: imageFiltersState, dispatch: dispatchImageFilters } = useImageFilters();
 
   // Check font loading status
   useEffect(() => {
@@ -2015,8 +2696,36 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
   const [modalOpen, setModalOpen] = useState(false);
 
+  // Add console logs for debugging state changes
+  useEffect(() => {
+    console.log("Modal open state changed:", modalOpen);
+  }, [modalOpen]);
+  useEffect(() => {
+    console.log("Image src changed:", imageSrc);
+  }, [imageSrc]);
+  useEffect(() => {
+    console.log("Processed image src changed:", processedImageSrc);
+  }, [processedImageSrc]);
+  useEffect(() => {
+    console.log("Error state changed:", error);
+  }, [error]);
+  useEffect(() => {
+    console.log("Text position changed:", textPosition);
+  }, [textPosition]);
+  useEffect(() => {
+    console.log("Text size changed:", textSize);
+  }, [textSize]);
+
+  useEffect(() => {
+    console.log("ThumbnailCreator mounted");
+    return () => {
+      console.log("ThumbnailCreator unmounted");
+    };
+  }, []);
+
   const setSelectedImage = async (file?: File) => {
     if (!file) return;
+    console.log("Image selected:", file);
     setModalOpen(true);
 
     setLoading(true);
@@ -2087,48 +2796,49 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
   // Generate composite CSS filter string with proper intensity application
   const getCompositeFilter = useCallback(() => {
-    const filter = imageFilters[selectedFilter as keyof typeof imageFilters];
-    const intensity = filterIntensity / 100;
+    const filter = imageFilters[imageFiltersState.selectedFilter as keyof typeof imageFilters];
+    const intensity = imageFiltersState.filterIntensity / 100;
     
     let filterString = "";
     
     // Apply base filter with intensity
     if (filter.filter && filter.filter !== "") {
-      if (selectedFilter === "grayscale") {
+      if (imageFiltersState.selectedFilter === "grayscale") {
         filterString += `grayscale(${intensity * 100}%)`;
-      } else if (selectedFilter === "sepia") {
+      } else if (imageFiltersState.selectedFilter === "sepia") {
         filterString += `sepia(${intensity * 100}%)`;
-      } else if (selectedFilter === "invert") {
+      } else if (imageFiltersState.selectedFilter === "invert") {
         filterString += `invert(${intensity * 100}%)`;
-      } else if (selectedFilter === "blur") {
+      } else if (imageFiltersState.selectedFilter === "blur") {
         filterString += `blur(${intensity * 2}px)`;
-      } else if (selectedFilter === "contrast") {
+      } else if (imageFiltersState.selectedFilter === "contrast") {
         const contrastValue = 100 + (50 * intensity);
         filterString += `contrast(${contrastValue}%)`;
-      } else if (selectedFilter === "brightness") {
+      } else if (imageFiltersState.selectedFilter === "brightness") {
         const brightnessValue = 100 + (30 * intensity);
         filterString += `brightness(${brightnessValue}%)`;
-      } else if (selectedFilter === "saturate") {
+      } else if (imageFiltersState.selectedFilter === "saturate") {
         const saturateValue = 100 + (100 * intensity);
         filterString += `saturate(${saturateValue}%)`;
       }
     }
     
     // Add adjustment filters
-    if (filterBrightness !== 100) {
-      filterString += filterString ? ` brightness(${filterBrightness}%)` : `brightness(${filterBrightness}%)`;
+    if (imageFiltersState.filterBrightness !== 100) {
+      filterString += filterString ? ` brightness(${imageFiltersState.filterBrightness}%)` : `brightness(${imageFiltersState.filterBrightness}%)`;
     }
     
-    if (filterContrast !== 100) {
-      filterString += filterString ? ` contrast(${filterContrast}%)` : `contrast(${filterContrast}%)`;
+    if (imageFiltersState.filterContrast !== 100) {
+      filterString += filterString ? ` contrast(${imageFiltersState.filterContrast}%)` : `contrast(${imageFiltersState.filterContrast}%)`;
     }
     
-    if (filterSaturation !== 100) {
-      filterString += filterString ? ` saturate(${filterSaturation}%)` : `saturate(${filterSaturation}%)`;
+    if (imageFiltersState.filterSaturation !== 100) {
+      filterString += filterString ? ` saturate(${imageFiltersState.filterSaturation}%)` : `saturate(${imageFiltersState.filterSaturation}%)`;
     }
     
+    console.log('filterString:', filterString); // Log the filter string for debugging
     return filterString;
-  }, [selectedFilter, filterIntensity, filterBrightness, filterContrast, filterSaturation]);
+  }, [imageFiltersState]);
   
   // Mouse event handlers for dragging
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -2312,20 +3022,20 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
             ctx.translate(x, y);
 
             // Apply text shadow if enabled
-            if (textShadow) {
-              ctx.shadowColor = shadowColor;
-              ctx.shadowBlur = shadowBlur;
+            if (textEffects.textShadow) {
+              ctx.shadowColor = textEffects.shadowColor;
+              ctx.shadowBlur = textEffects.shadowBlur;
               ctx.shadowOffsetX = 2;
               ctx.shadowOffsetY = 2;
             }
 
             // Draw text outline if enabled (apply opacity to outline as well)
-            if (textOutline) {
-              ctx.lineWidth = outlineWidth;
-              ctx.strokeStyle = outlineColor;
+            if (textEffects.textOutline) {
+              ctx.lineWidth = textEffects.outlineWidth;
+              ctx.strokeStyle = textEffects.outlineColor;
               // Apply opacity to outline when gradient is used
-              if (useGradient) {
-                ctx.globalAlpha = textOpacity / 100;
+              if (textEffects.useGradient) {
+                ctx.globalAlpha = textEffects.textOpacity / 100;
               }
               ctx.strokeText(text, 0, 0);
               // Reset alpha for fill
@@ -2333,17 +3043,17 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
             }
 
             // Apply gradient fill if enabled
-            if (useGradient) {
-              const angle = (gradientDirection * Math.PI) / 180;
+            if (textEffects.useGradient) {
+              const angle = (textEffects.gradientDirection * Math.PI) / 180;
               const x1 = Math.cos(angle) * textWidth / 2;
               const y1 = Math.sin(angle) * textSize / 2; // Use textSize instead of fontSize
               
               const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
-              gradient.addColorStop(0, gradientColor1);
-              gradient.addColorStop(1, gradientColor2);
+              gradient.addColorStop(0, textEffects.gradientColor1);
+              gradient.addColorStop(1, textEffects.gradientColor2);
               ctx.fillStyle = gradient;
               // Apply custom text opacity for gradient
-              ctx.globalAlpha = textOpacity / 100;
+              ctx.globalAlpha = textEffects.textOpacity / 100;
             } else {
               ctx.fillStyle = preset.color;
               ctx.globalAlpha = preset.opacity;
@@ -2409,33 +3119,20 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     selectedStyle, 
     imageSrc, 
     processedImageSrc, 
-    textShadow, 
-    shadowBlur, 
-    shadowColor, 
-    textOutline, 
-    outlineWidth, 
-    outlineColor, 
-    useGradient,
-    gradientColor1,
-    gradientColor2,
-    gradientDirection,
-    textOpacity,
+    textEffects,
     getCompositeFilter,
     fontsLoaded,
     textPosition,
     textSize,
   ]);
 
-  // Optimize canvas drawing with debouncing
-  const debouncedDrawCompositeImage = useCallback(
-    debounce(() => {
-      console.log('Debounced drawCompositeImage triggered at:', performance.now());
-      drawCompositeImage();
-    }, 100),
-    [drawCompositeImage]
-  );
+  // Debounced draw for general effect changes (100ms)
+  const debouncedDrawCompositeImage = useDebounce(() => {
+    console.log('Debounced drawCompositeImage triggered at:', performance.now());
+    drawCompositeImage();
+  }, 100);
 
-  // Use debounced version for text/effect changes
+  // Use debounced version for general text/effect changes
   useEffect(() => {
     if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
       console.log('useEffect triggered draw at:', performance.now(), 
@@ -2444,23 +3141,21 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     }
   }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
 
+  // Direct draw for text dragging and text size changes (no debounce)
+  useEffect(() => {
+    if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
+      drawCompositeImage();
+    }
+  }, [canvasReady, imageSrc, processedImageSrc, fontsLoaded, textPosition, textSize]);
+
   // Optimize download function
   const handleDownload = useCallback(async () => {
+    console.log("Download button clicked");
     if (!canvasRef.current || !originalDimensions) return;
     
     try {
-      // Deduct a credit before allowing download (via API route)
-      try {
-        const res = await fetch("/api/deduct-credits", { method: "POST" });
-        const data = await res.json();
-        if (!data.success) {
-          setError("Failed to deduct credits. " + (data.error || "You may not have enough credits left."));
-          return;
-        }
-      } catch (err) {
-        setError("Failed to deduct credits. Please try again.");
-        return;
-      }
+      
+      
       // Create a temporary canvas for high-resolution export
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d', {
@@ -2514,6 +3209,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   }, [originalDimensions]);
 
   const handleReset = async () => {
+    console.log("Reset button clicked");
     try {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -2547,39 +3243,6 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     }
   };
 
-  // Color Swatch Picker Component
-  const ColorSwatchPicker = ({ value, onChange, label }: { value: string; onChange: (color: string) => void; label: string }) => (
-    <div className="space-y-2">
-      <Label className="text-sm">{label}</Label>
-      <div className="flex items-center gap-2 mb-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 w-12 rounded border border-gray-300 cursor-pointer"
-        />
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 text-xs flex-1"
-          placeholder="#000000"
-        />
-      </div>
-      <div className="grid grid-cols-6 gap-1">
-        {colorSwatches.map((color, index) => (
-          <button
-            key={index}
-            className="h-6 w-6 rounded border border-gray-200 hover:border-gray-400 transition-colors"
-            style={{ backgroundColor: color }}
-            onClick={() => onChange(color)}
-            title={color}
-          />
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <>
       {/* Main page: only style selection and upload */}
@@ -2590,23 +3253,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
               <h2 className="text-2xl font-semibold tracking-tight">Choose a Template</h2>
               <p className="text-muted-foreground">Select a style for your thumbnail design</p>
             </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
-              <Style
-                image="/style1.png"
-                selectStyle={() => setSelectedStyle("style1")}
-                isSelected={selectedStyle === "style1"}
-              />
-              <Style
-                image="/style2.png"
-                selectStyle={() => setSelectedStyle("style2")}
-                isSelected={selectedStyle === "style2"}
-              />
-              <Style
-                image="/style3.png"
-                selectStyle={() => setSelectedStyle("style3")}
-                isSelected={selectedStyle === "style3"}
-              />
-            </div>
+            <StyleSelector selectedStyle={selectedStyle} onSelect={setSelectedStyle} />
           </div>
           <div className="mt-10 space-y-4">
             <div className="space-y-2">
@@ -2627,19 +3274,6 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
             ) : (
               <div className="flex w-full h-full gap-6 p-6 overflow-auto flex-col md:flex-row">
                 <div className="w-full md:w-[70%] flex items-center justify-center mb-4 md:mb-0">
-                  {error && (
-                    <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
-                      <p className="text-red-800 text-sm">{error}</p>
-                      <Button 
-                        onClick={() => setError(null)} 
-                        className="mt-2 text-xs"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
-                  )}
                   <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard w-full">
                     <canvas
                       ref={canvasRef}
@@ -2651,402 +3285,54 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                     ></canvas>
                   </div>
                 </div>
-                <Card className="w-full md:w-[25%] max-h-[80vh] border-none shadow-md bg-background/80 backdrop-blur-sm flex flex-col">
-                  <CardHeader className="pb-3 px-5">
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <Sliders className="h-4 w-4 text-primary" />
-                      Edit Thumbnail
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-5 flex-1 overflow-y-auto">
-                    <Tabs defaultValue="text" className="w-full">
-                      <TabsList className="grid w-full grid-cols-3 mb-4">
-                        <TabsTrigger value="text" className="flex items-center gap-1.5 text-xs">
-                          <Type className="h-3.5 w-3.5" />
-                          <span>Text</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="effects" className="flex items-center gap-1.5 text-xs">
-                          <Type className="h-3.5 w-3.5" />
-                          <span>Text Effects</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="filters" className="flex items-center gap-1.5 text-xs">
-                          <LucideImage className="h-3.5 w-3.5" />
-                          <span>Image Filters</span>
-                        </TabsTrigger>
-                      </TabsList>
-                      
-                      {/* Text Tab */}
-                      <TabsContent value="text" className="space-y-5">
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="text" className="text-sm font-medium">Caption Text</Label>
-                          <Input
-                            value={text}
-                            onChange={(e) => setText(e.target.value)}
-                            id="text"
-                            placeholder="Enter text for your thumbnail"
-                            className="h-10"
-                          />
-                        </div>
-
-                        {/* Add Text Size Control */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="text-size" className="text-sm">Text Size</Label>
-                            <span className="text-xs text-muted-foreground">{textSize}px</span>
-                          </div>
-                          <Slider 
-                            id="text-size"
-                            min={20} 
-                            max={400} 
-                            step={1}
-                            value={[textSize]}
-                            onValueChange={(value: number[]) => {
-                              if (value[0] !== undefined) {
-                                setTextSize(value[0]);
-                              }
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="font" className="text-sm font-medium">Font Family</Label>
-                          <Select
-                            value={font}
-                            onValueChange={(value) => setFont(value)}
-                          >
-                            <SelectTrigger id="font" className="h-10 w-full">
-                              <SelectValue placeholder="Select a font" />
-                            </SelectTrigger>
-                            <SelectContent position="popper">
-                              {FONT_OPTIONS.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </TabsContent>
-                      
-                      {/* Text Effects Tab */}
-                      <TabsContent value="effects" className="space-y-4 mt-4">
-                        {/* Text Shadow Controls */}
-                        <div className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="shadow-toggle" className="font-medium">Text Shadow</Label>
-                            <input 
-                              type="checkbox" 
-                              id="shadow-toggle"
-                              checked={textShadow}
-                              onChange={(e) => setTextShadow(e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                          </div>
-                          
-                          {textShadow && (
-                            <div className="mt-3 space-y-3">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor="shadow-blur" className="text-sm">Blur</Label>
-                                  <span className="text-xs text-muted-foreground">{shadowBlur}px</span>
-                                </div>
-                                <Slider 
-                                  id="shadow-blur"
-                                  min={0} 
-                                  max={20} 
-                                  step={1}
-                                  value={[shadowBlur]}
-                                  onValueChange={(value: number[]) => {
-                                    if (value[0] !== undefined) {
-                                      setShadowBlur(value[0]);
-                                    }
-                                  }}
-                                />
-                              </div>
-                              
-                              <ColorSwatchPicker
-                                value={shadowColor}
-                                onChange={setShadowColor}
-                                label="Shadow Color"
-                              />
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Text Outline Controls */}
-                        <div className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="outline-toggle" className="font-medium">Text Outline</Label>
-                            <input 
-                              type="checkbox" 
-                              id="outline-toggle"
-                              checked={textOutline}
-                              onChange={(e) => setTextOutline(e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                          </div>
-                          
-                          {textOutline && (
-                            <div className="mt-3 space-y-3">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor="outline-width" className="text-sm">Width</Label>
-                                  <span className="text-xs text-muted-foreground">{outlineWidth}px</span>
-                                </div>
-                                <Slider 
-                                  id="outline-width"
-                                  min={1} 
-                                  max={10} 
-                                  step={1}
-                                  value={[outlineWidth]}
-                                  onValueChange={(value: number[]) => {
-                                    if (value[0] !== undefined) {
-                                      setOutlineWidth(value[0]);
-                                    }
-                                  }}
-                                />
-                              </div>
-                              
-                              <ColorSwatchPicker
-                                value={outlineColor}
-                                onChange={setOutlineColor}
-                                label="Outline Color"
-                              />
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Enhanced Text Gradient Controls with Opacity */}
-                        <div className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="gradient-toggle" className="font-medium">Gradient Fill</Label>
-                            <input 
-                              type="checkbox" 
-                              id="gradient-toggle"
-                              checked={useGradient}
-                              onChange={(e) => setUseGradient(e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                          </div>
-                          
-                          {useGradient && (
-                            <div className="mt-3 space-y-4">
-                              {/* Gradient Presets */}
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Quick Presets</Label>
-                                <div className="grid grid-cols-4 gap-2">
-                                  {gradientPresets.map((preset, index) => (
-                                    <button
-                                      key={index}
-                                      className="h-8 rounded border border-gray-200 hover:border-gray-400 transition-colors relative overflow-hidden"
-                                      style={{
-                                        background: `linear-gradient(90deg, ${preset.colors[0]}, ${preset.colors[1]})`
-                                      }}
-                                      onClick={() => {
-                                        setGradientColor1(preset.colors[0] ?? "#000000");
-                                        setGradientColor2(preset.colors[1] ?? "#ffffff");
-                                      }}
-                                      title={preset.name}
-                                    >
-                                      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
-                                        {preset.name}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* Gradient Direction */}
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Gradient Direction</Label>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {directionPresets.map((preset, index) => (
-                                    <button
-                                      key={index}
-                                      className={`h-8 text-lg border rounded transition-colors ${
-                                        gradientDirection === preset.angle 
-                                          ? 'border-primary bg-primary/10 text-primary' 
-                                          : 'border-gray-200 hover:border-gray-400'
-                                      }`}
-                                      onClick={() => setGradientDirection(preset.angle)}
-                                      title={preset.desc}
-                                    >
-                                      {preset.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* Color Pickers */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <ColorSwatchPicker
-                                  value={gradientColor1}
-                                  onChange={setGradientColor1}
-                                  label="Color 1"
-                                />
-                                <ColorSwatchPicker
-                                  value={gradientColor2}
-                                  onChange={setGradientColor2}
-                                  label="Color 2"
-                                />
-                              </div>
-                              
-                              {/* Text Opacity Control */}
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor="text-opacity" className="text-sm font-medium">Text Opacity</Label>
-                                  <span className="text-xs text-muted-foreground">{textOpacity}%</span>
-                                </div>
-                                <Slider 
-                                  id="text-opacity"
-                                  min={0} 
-                                  max={100} 
-                                  step={1}
-                                  value={[textOpacity]}
-                                  onValueChange={(value: number[]) => {
-                                    if (value[0] !== undefined) {
-                                      setTextOpacity(value[0]);
-                                    }
-                                  }}
-                                />
-                              </div>
-                              
-                              {/* Live Preview with Opacity */}
-                              <div className="space-y-2">
-                                <Label className="text-sm">Preview</Label>
-                                <div className="h-8 w-full rounded-md border border-gray-200 relative overflow-hidden bg-gray-100">
-                                  <div
-                                    className="absolute inset-0"
-                                    style={{ 
-                                      background: `linear-gradient(${gradientDirection}deg, ${gradientColor1}, ${gradientColor2})`,
-                                      opacity: textOpacity / 100
-                                    }} 
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </TabsContent>
-                      
-                      {/* Image Filters Tab */}
-                      <TabsContent value="filters" className="space-y-4 mt-4">
-                        <div className="space-y-3">
-                          <Label htmlFor="filter-preset" className="font-medium">Filter Preset</Label>
-                          <div className="grid grid-cols-4 gap-2">
-                            {Object.entries(imageFilters).map(([key, filter]) => (
-                              <button
-                                key={key}
-                                className={`p-1 rounded-md text-xs border transition-colors ${
-                                  selectedFilter === key 
-                                    ? 'border-primary ring-1 ring-primary bg-primary/5' 
-                                    : 'border-border hover:border-gray-400'
-                                }`}
-                                onClick={() => setSelectedFilter(key)}
-                              >
-                                {filter.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="brightness" className="text-sm">Brightness</Label>
-                            <span className="text-xs text-muted-foreground">{filterBrightness}%</span>
-                          </div>
-                          <Slider 
-                            id="brightness"
-                            min={50} 
-                            max={150} 
-                            step={1}
-                            value={[filterBrightness]}
-                            onValueChange={(value: number[]) => {
-                              if (value[0] !== undefined) {
-                                setFilterBrightness(value[0]);
-                              }
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="contrast" className="text-sm">Contrast</Label>
-                            <span className="text-xs text-muted-foreground">{filterContrast}%</span>
-                          </div>
-                          <Slider 
-                            id="contrast"
-                            min={50} 
-                            max={150} 
-                            step={1}
-                            value={[filterContrast]}
-                            onValueChange={(value: number[]) => {
-                              if (value[0] !== undefined) {
-                                setFilterContrast(value[0]);
-                              }
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="saturation" className="text-sm">Saturation</Label>
-                            <span className="text-xs text-muted-foreground">{filterSaturation}%</span>
-                          </div>
-                          <Slider 
-                            id="saturation"
-                            min={0} 
-                            max={200} 
-                            step={1}
-                            value={[filterSaturation]}
-                            onValueChange={(value: number[]) => {
-                              if (value[0] !== undefined) {
-                                setFilterSaturation(value[0]);
-                              }
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="intensity" className="text-sm">Effect Intensity</Label>
-                            <span className="text-xs text-muted-foreground">{filterIntensity}%</span>
-                          </div>
-                          <Slider 
-                            id="intensity"
-                            min={0} 
-                            max={100} 
-                            step={1}
-                            value={[filterIntensity]}
-                            onValueChange={(value: number[]) => {
-                              if (value[0] !== undefined) {
-                                setFilterIntensity(value[0]);
-                              }
-                            }}
-                          />
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                  <CardFooter className="flex flex-wrap justify-between gap-2 px-5 pt-2 pb-5">
-                    <Button 
-                      onClick={handleDownload} 
-                      className="gap-1.5 bg-primary/90 hover:bg-primary"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                      </svg>
-                      Download
-                    </Button>
-                    <Button 
-                      onClick={drawCompositeImage} 
-                      className="gap-1.5 bg-muted/80 hover:bg-muted text-foreground"
-                    >
-                      <Sliders className="h-4 w-4" />
-                      Update
-                    </Button>
-                  </CardFooter>
-                </Card>
+                <EditorSidebar
+                  // Text tab
+                  text={text}
+                  setText={setText}
+                  textSize={textSize}
+                  setTextSize={setTextSize}
+                  font={font}
+                  setFont={setFont}
+                  // Effects tab
+                  textShadow={textEffects.textShadow}
+                  setTextShadow={(b) => dispatchTextEffects({ type: 'SET_SHADOW', value: b })}
+                  shadowBlur={textEffects.shadowBlur}
+                  setShadowBlur={(n) => dispatchTextEffects({ type: 'SET_SHADOW_BLUR', value: n })}
+                  shadowColor={textEffects.shadowColor}
+                  setShadowColor={(c) => dispatchTextEffects({ type: 'SET_SHADOW_COLOR', value: c })}
+                  textOutline={textEffects.textOutline}
+                  setTextOutline={(b) => dispatchTextEffects({ type: 'SET_OUTLINE', value: b })}
+                  outlineWidth={textEffects.outlineWidth}
+                  setOutlineWidth={(n) => dispatchTextEffects({ type: 'SET_OUTLINE_WIDTH', value: n })}
+                  outlineColor={textEffects.outlineColor}
+                  setOutlineColor={(c) => dispatchTextEffects({ type: 'SET_OUTLINE_COLOR', value: c })}
+                  useGradient={textEffects.useGradient}
+                  setUseGradient={(b) => dispatchTextEffects({ type: 'SET_GRADIENT', value: b })}
+                  gradientColor1={textEffects.gradientColor1}
+                  setGradientColor1={(c) => dispatchTextEffects({ type: 'SET_GRADIENT_COLOR1', value: c })}
+                  gradientColor2={textEffects.gradientColor2}
+                  setGradientColor2={(c) => dispatchTextEffects({ type: 'SET_GRADIENT_COLOR2', value: c })}
+                  gradientDirection={textEffects.gradientDirection}
+                  setGradientDirection={(n) => dispatchTextEffects({ type: 'SET_GRADIENT_DIRECTION', value: n })}
+                  textOpacity={textEffects.textOpacity}
+                  setTextOpacity={(n) => dispatchTextEffects({ type: 'SET_TEXT_OPACITY', value: n })}
+                  // Filters tab
+                  selectedFilter={imageFiltersState.selectedFilter}
+                  setSelectedFilter={(f) => dispatchImageFilters({ type: 'SET_FILTER', value: f })}
+                  filterIntensity={imageFiltersState.filterIntensity}
+                  setFilterIntensity={(n) => dispatchImageFilters({ type: 'SET_INTENSITY', value: n })}
+                  filterBrightness={imageFiltersState.filterBrightness}
+                  setFilterBrightness={(n) => dispatchImageFilters({ type: 'SET_BRIGHTNESS', value: n })}
+                  filterContrast={imageFiltersState.filterContrast}
+                  setFilterContrast={(n) => dispatchImageFilters({ type: 'SET_CONTRAST', value: n })}
+                  filterSaturation={imageFiltersState.filterSaturation}
+                  setFilterSaturation={(n) => dispatchImageFilters({ type: 'SET_SATURATION', value: n })}
+                  // Actions
+                  onDownload={handleDownload}
+                  onUpdate={drawCompositeImage}
+                  error={error}
+                  onDismissError={() => setError(null)}
+                />
               </div>
             )}
           </>
@@ -4047,6 +4333,203 @@ export const env = createEnv({
 });
 </file>
 
+<file path="src/hooks/useDebounce.ts">
+import { useRef, useCallback } from "react";
+
+function useDebounce<T extends (...args: any[]) => void>(func: T, wait: number) {
+  const timeout = useRef<NodeJS.Timeout | null>(null);
+
+  return useCallback((...args: Parameters<T>) => {
+    if (timeout.current) clearTimeout(timeout.current);
+    timeout.current = setTimeout(() => func(...args), wait);
+  }, [func, wait]);
+}
+
+export default useDebounce;
+</file>
+
+<file path="src/hooks/useDrag.ts">
+import { useState, useRef, useCallback } from "react";
+
+export function useDrag(initialPosition = { x: 0.5, y: 0.5 }) {
+  const [textPosition, setTextPosition] = useState(initialPosition);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>, canvasRef: React.RefObject<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const textX = textPosition.x * rect.width;
+    const textY = textPosition.y * rect.height;
+    const distance = Math.sqrt(Math.pow(x * rect.width - textX, 2) + Math.pow(y * rect.height - textY, 2));
+    if (distance < 50) {
+      setIsDragging(true);
+      dragStartPos.current = {
+        x: x - textPosition.x,
+        y: y - textPosition.y
+      };
+    }
+  }, [textPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>, canvasRef: React.RefObject<HTMLCanvasElement>) => {
+    if (!isDragging || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    setTextPosition({
+      x: Math.max(0, Math.min(1, x - dragStartPos.current.x)),
+      y: Math.max(0, Math.min(1, y - dragStartPos.current.y))
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  return {
+    textPosition,
+    setTextPosition,
+    isDragging,
+    setIsDragging,
+    dragStartPos,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+  };
+}
+
+export default useDrag;
+</file>
+
+<file path="src/hooks/useImageFilters.ts">
+import { useReducer } from "react";
+
+const initialImageFilters = {
+  selectedFilter: "none",
+  filterIntensity: 100,
+  filterBrightness: 100,
+  filterContrast: 100,
+  filterSaturation: 100,
+};
+
+type ImageFiltersAction =
+  | { type: "SET_FILTER"; value: string }
+  | { type: "SET_INTENSITY"; value: number }
+  | { type: "SET_BRIGHTNESS"; value: number }
+  | { type: "SET_CONTRAST"; value: number }
+  | { type: "SET_SATURATION"; value: number };
+
+function reducer(state: typeof initialImageFilters, action: ImageFiltersAction) {
+  switch (action.type) {
+    case "SET_FILTER": return { ...state, selectedFilter: action.value };
+    case "SET_INTENSITY": return { ...state, filterIntensity: action.value };
+    case "SET_BRIGHTNESS": return { ...state, filterBrightness: action.value };
+    case "SET_CONTRAST": return { ...state, filterContrast: action.value };
+    case "SET_SATURATION": return { ...state, filterSaturation: action.value };
+    default: return state;
+  }
+}
+
+export default function useImageFilters() {
+  const [state, dispatch] = useReducer(reducer, initialImageFilters);
+  return { state, dispatch };
+}
+</file>
+
+<file path="src/hooks/useImageProcessing.ts">
+import { useState, useRef } from "react";
+
+export function useImageProcessing() {
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [processedImageSrc, setProcessedImageSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [canvasReady, setCanvasReady] = useState(false);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const fileReaderRef = useRef<FileReader | null>(null);
+  const imageObjectsRef = useRef<HTMLImageElement[]>([]);
+
+  // ... image processing logic to be filled in from thumbnail-creator.tsx ...
+
+  return {
+    imageSrc,
+    setImageSrc,
+    processedImageSrc,
+    setProcessedImageSrc,
+    loading,
+    setLoading,
+    error,
+    setError,
+    originalDimensions,
+    setOriginalDimensions,
+    canvasReady,
+    setCanvasReady,
+    abortControllerRef,
+    fileReaderRef,
+    imageObjectsRef,
+  };
+}
+
+export default useImageProcessing;
+</file>
+
+<file path="src/hooks/useTextEffects.ts">
+import { useReducer } from "react";
+
+const initialTextEffects = {
+  textShadow: false,
+  shadowBlur: 5,
+  shadowColor: "rgba(0, 0, 0, 0.7)",
+  textOutline: false,
+  outlineWidth: 2,
+  outlineColor: "#000000",
+  useGradient: false,
+  gradientColor1: "#ff0000",
+  gradientColor2: "#0000ff",
+  gradientDirection: 90,
+  textOpacity: 100,
+};
+
+type TextEffectsAction =
+  | { type: "SET_SHADOW"; value: boolean }
+  | { type: "SET_SHADOW_BLUR"; value: number }
+  | { type: "SET_SHADOW_COLOR"; value: string }
+  | { type: "SET_OUTLINE"; value: boolean }
+  | { type: "SET_OUTLINE_WIDTH"; value: number }
+  | { type: "SET_OUTLINE_COLOR"; value: string }
+  | { type: "SET_GRADIENT"; value: boolean }
+  | { type: "SET_GRADIENT_COLOR1"; value: string }
+  | { type: "SET_GRADIENT_COLOR2"; value: string }
+  | { type: "SET_GRADIENT_DIRECTION"; value: number }
+  | { type: "SET_TEXT_OPACITY"; value: number };
+
+function reducer(state: typeof initialTextEffects, action: TextEffectsAction) {
+  switch (action.type) {
+    case "SET_SHADOW": return { ...state, textShadow: action.value };
+    case "SET_SHADOW_BLUR": return { ...state, shadowBlur: action.value };
+    case "SET_SHADOW_COLOR": return { ...state, shadowColor: action.value };
+    case "SET_OUTLINE": return { ...state, textOutline: action.value };
+    case "SET_OUTLINE_WIDTH": return { ...state, outlineWidth: action.value };
+    case "SET_OUTLINE_COLOR": return { ...state, outlineColor: action.value };
+    case "SET_GRADIENT": return { ...state, useGradient: action.value };
+    case "SET_GRADIENT_COLOR1": return { ...state, gradientColor1: action.value };
+    case "SET_GRADIENT_COLOR2": return { ...state, gradientColor2: action.value };
+    case "SET_GRADIENT_DIRECTION": return { ...state, gradientDirection: action.value };
+    case "SET_TEXT_OPACITY": return { ...state, textOpacity: action.value };
+    default: return state;
+  }
+}
+
+export default function useTextEffects() {
+  const [state, dispatch] = useReducer(reducer, initialTextEffects);
+  return { state, dispatch };
+}
+</file>
+
 <file path="src/lib/utils.ts">
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
@@ -4054,28 +4537,105 @@ import { twMerge } from "tailwind-merge"
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+// Presets
+export const presets = {
+  style1: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(255, 255, 255, 1)",
+    opacity: 1,
+  },
+  style2: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(0, 0, 0, 1)",
+    opacity: 1,
+  },
+  style3: {
+    fontSize: 100,
+    fontWeight: "bold",
+    color: "rgba(255, 255, 255, 0.8)",
+    opacity: 0.8,
+  },
+};
+
+// Image filter presets
+export const imageFilters = {
+  none: { name: "None", filter: "" },
+  grayscale: { name: "B&W", filter: "grayscale(100%)" },
+  sepia: { name: "Sepia", filter: "sepia(100%)" },
+  invert: { name: "Invert", filter: "invert(100%)" },
+  contrast: { name: "High Contrast", filter: "contrast(150%)" },
+  brightness: { name: "Bright", filter: "brightness(130%)" },
+  blur: { name: "Soft Focus", filter: "blur(2px)" },
+  saturate: { name: "Vibrant", filter: "saturate(200%)" },
+};
+
+// Gradient presets
+export const gradientPresets = [
+  { name: "Sunset", colors: ["#ff7e5f", "#feb47b"] },
+  { name: "Ocean", colors: ["#2196f3", "#21cbf3"] },
+  { name: "Purple", colors: ["#667eea", "#764ba2"] },
+  { name: "Green", colors: ["#11998e", "#38ef7d"] },
+  { name: "Pink", colors: ["#ff9a9e", "#fecfef"] },
+  { name: "Gold", colors: ["#ffecd2", "#fcb69f"] },
+  { name: "Fire", colors: ["#ff416c", "#ff4b2b"] },
+  { name: "Sky", colors: ["#a8edea", "#fed6e3"] },
+  { name: "Night", colors: ["#0c0c0c", "#654ea3"] },
+  { name: "Autumn", colors: ["#f79d00", "#64f38c"] },
+  { name: "Cool", colors: ["#2196f3", "#9c27b0"] },
+  { name: "Warm", colors: ["#ff5722", "#ffc107"] },
+];
+
+// Color swatches
+export const colorSwatches = [
+  "#ff0000", "#ff4000", "#ff8000", "#ffbf00", "#ffff00", "#bfff00",
+  "#80ff00", "#40ff00", "#00ff00", "#00ff40", "#00ff80", "#00ffbf",
+  "#00ffff", "#00bfff", "#0080ff", "#0040ff", "#0000ff", "#4000ff",
+  "#8000ff", "#bf00ff", "#ff00ff", "#ff00bf", "#ff0080", "#ff0040",
+  "#000000", "#404040", "#808080", "#bfbfbf", "#ffffff", "#ffcccc",
+  "#ccffcc", "#ccccff", "#ffffcc", "#ffccff", "#ccffff", "#ffddcc"
+];
+
+// Gradient direction presets
+export const directionPresets = [
+  { name: "→", angle: 90, desc: "Left to Right" },
+  { name: "←", angle: 270, desc: "Right to Left" },
+  { name: "↓", angle: 180, desc: "Top to Bottom" },
+  { name: "↑", angle: 0, desc: "Bottom to Top" },
+  { name: "↘", angle: 135, desc: "Diagonal Down" },
+  { name: "↙", angle: 225, desc: "Diagonal Left" },
+  { name: "↖", angle: 315, desc: "Diagonal Up" },
+  { name: "↗", angle: 45, desc: "Diagonal Right" },
+];
+
+// Font options
+export const FONT_OPTIONS = [
+  { label: "Arial", value: "arial", css: "Arial, sans-serif" },
+  { label: "Inter", value: "inter", css: "var(--font-inter), Arial, sans-serif" },
+  { label: "Domine", value: "domine", css: "var(--font-domine), Georgia, serif" },
+  { label: "Roboto", value: "roboto", css: 'Roboto, Arial, sans-serif' },
+  { label: "Lato", value: "lato", css: 'Lato, Arial, sans-serif' },
+  { label: "Montserrat", value: "montserrat", css: 'Montserrat, Arial, sans-serif' },
+  { label: "Oswald", value: "oswald", css: 'Oswald, Arial, sans-serif' },
+  { label: "Playfair Display", value: "playfair", css: 'Playfair Display, Georgia, serif' },
+];
 </file>
 
 <file path="src/middleware.ts">
-import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-// Export middleware with better error handling
-export default withAuth(
-  function middleware(req) {
-    // Successful authentication continues to the requested page
-    return NextResponse.next();
-  },
-  {
-    pages: { signIn: "/signin" },
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
-  }
-);
+export default clerkMiddleware();
 
-// Protect only dashboard and subsequent routes
-export const config = { matcher: ["/dashboard/:path*"] };
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
+  ],
+};
 </file>
 
 <file path="src/schemas/auth.ts">
@@ -4216,6 +4776,31 @@ export const authConfig = {
     }
   },
 };
+</file>
+
+<file path="src/server/auth/getOrCreateUser.ts">
+import { db } from "~/server/db";
+import { currentUser } from "@clerk/nextjs/server";
+
+export async function getOrCreateUser() {
+  const clerkUser = await currentUser();
+  if (!clerkUser) throw new Error("Not authenticated");
+
+  let user = await db.user.findUnique({ where: { id: clerkUser.id } });
+  if (!user) {
+    user = await db.user.create({
+      data: {
+        id: clerkUser.id,
+        email: clerkUser.emailAddresses[0]?.emailAddress,
+        name: `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim(),
+        image: clerkUser.imageUrl,
+        credits: 10,
+        password: "", // Clerk handles authentication
+      },
+    });
+  }
+  return user;
+}
 </file>
 
 <file path="src/server/auth/index.ts">

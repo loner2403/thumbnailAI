@@ -1,23 +1,9 @@
-import { redirect } from "next/navigation";
-import SignIn from "~/components/ui/signin";
-import { auth } from "~/server/auth";
+import { SignIn } from "@clerk/nextjs";
 
-export const metadata = {
-  title: "Sign In",
-  description: "Sign in to your account",
-}
-
-export default async function SignInPage() {
-  const session = await auth();
-
-  // Redirect to dashboard if user is already logged in
-  if (session?.user) {
-    redirect("/dashboard");
-  }
-
+export default function SignInPage() {
   return (
-    <div className="container mx-auto py-10">
-      <SignIn />
+    <div className="flex justify-center items-center min-h-screen">
+      <SignIn forceRedirectUrl="/dashboard" />
     </div>
   );
 }

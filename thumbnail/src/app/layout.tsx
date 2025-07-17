@@ -4,6 +4,8 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "~/components/ui/sonner";
 import { SessionProvider } from "~/components/SessionProvider";
+import { ClerkProvider, SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import Header from "~/components/Header";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -18,19 +20,17 @@ const geist = Geist({
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
-      <body>
-        <SessionProvider>
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <Header />
           {children}
-        </SessionProvider>
-        <Toaster 
-          expand={true}
-          richColors={true}
-          closeButton={true}
-        />
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

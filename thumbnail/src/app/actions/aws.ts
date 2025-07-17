@@ -1,9 +1,9 @@
 "use server"
 
 import AWS from "aws-sdk";
-import { redirect } from "next/navigation";
 import { env } from "~/env";
 import { auth } from "~/server/auth";
+import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const s3 = new AWS.S3({
     accessKeyId: env.AWS_ACCESS_KEY,
@@ -13,17 +13,13 @@ const s3 = new AWS.S3({
 })
 
 export const getPresignedUrl = async () => {
-    const serverSession = await auth();
-
-    if(!serverSession || !serverSession.user?.id) {
-        throw new Error("User not authenticated");
-    }
+    const user = await getOrCreateUser();
 
     // Format date as yyyyMMddHHmmss
     const pad = (n: number) => n.toString().padStart(2, '0');
     const now = new Date();
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const userId = serverSession.user.id;
+    const userId = user.id;
     const key = `${userId}/thumbnail-${timestamp}.png`;
 
     const params = {

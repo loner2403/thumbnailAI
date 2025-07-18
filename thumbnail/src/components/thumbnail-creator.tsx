@@ -676,7 +676,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
             {loading ? (
               <LoadingScreen message="Processing image... This may take a moment." />
             ) : (
-              <div className="flex w-full h-full gap-6 p-6 overflow-auto flex-col md:flex-row">
+              <div className="flex w-full gap-6 p-6 flex-col md:flex-row min-h-0">
                 <div className="w-full md:w-[70%] flex items-center justify-center mb-4 md:mb-0">
                   <div className="rounded-lg shadow-md overflow-hidden bg-checkerboard w-full">
                     <canvas

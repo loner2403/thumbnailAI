@@ -2,6 +2,7 @@ import React from "react";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
 import ColorSwatchPicker from "./ColorSwatchPicker";
+import ColorPicker from "./color-picker";
 import { gradientPresets, directionPresets } from "../lib/utils";
 
 interface EffectsTabProps {
@@ -175,19 +176,15 @@ const EffectsTab: React.FC<EffectsTabProps> = (props) => {
                 ))}
               </div>
             </div>
-            {/* Color Pickers */}
-            <div className="grid grid-cols-2 gap-3">
-              <ColorSwatchPicker
-                value={gradientColor1}
-                onChange={setGradientColor1}
-                label="Color 1"
-              />
-              <ColorSwatchPicker
-                value={gradientColor2}
-                onChange={setGradientColor2}
-                label="Color 2"
-              />
-            </div>
+            {/* Replace two color pickers with one */}
+            <ColorPicker
+              color={gradientColor1}
+              onChange={(color) => {
+                setGradientColor1(color);
+                setGradientColor2(color);
+              }}
+              label="Gradient Color"
+            />
             {/* Text Opacity Control */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">

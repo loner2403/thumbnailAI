@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { ImageIcon, UploadCloud } from "lucide-react";
+import { UploadCloud } from "lucide-react";
+import Image from "next/image";
 
 interface DropzoneProps {
   onFileAccepted?: (file: File) => void;
@@ -14,12 +15,12 @@ const Dropzone: React.FC<DropzoneProps> = ({ onFileAccepted, setSelectedImage })
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = (files: FileList | null) => {
-    if (files && files[0]) {
+    if (files?.[0]) {
       const file = files[0];
       if (file.type.startsWith("image/")) {
         setPreview(URL.createObjectURL(file));
         onFileAccepted?.(file);
-        setSelectedImage?.(file);
+        setSelectedImage?.(file).catch(err => console.error(err));
       }
     }
   };
@@ -68,9 +69,11 @@ const Dropzone: React.FC<DropzoneProps> = ({ onFileAccepted, setSelectedImage })
       {preview ? (
         <div className="relative flex flex-col items-center gap-3">
           <div className="relative rounded-md overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
-            <img
+            <Image
               src={preview}
               alt="Preview"
+              width={200}
+              height={200}
               className="max-h-44 object-contain"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>

@@ -2,7 +2,6 @@
 
 import { useForm } from "react-hook-form";
 import Link from "next/link";
-import { useState } from "react";
 import { IoMdArrowBack } from "react-icons/io";
 import {
   Card,
@@ -18,7 +17,6 @@ import { Button } from "./button";
 import { z } from "zod";
 import { signInSchema } from "~/schemas/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { signup } from "~/app/actions/auth";
 import { toast } from "sonner";
@@ -26,7 +24,7 @@ import { toast } from "sonner";
 type FormValues = z.infer<typeof signInSchema>;
 
 const Signup = () => {
-  const router = useRouter();
+  
 
   const {
     register,

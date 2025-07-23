@@ -35,7 +35,7 @@ export default function LandingHeader() {
     if (!headerRef.current) return;
 
     const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
-    
+
     // Initial header animation
     timeline
       .fromTo(
@@ -50,13 +50,13 @@ export default function LandingHeader() {
         '-=0.6'
       )
       .fromTo(
-        navRef.current?.querySelectorAll('a') || [],
+        navRef.current?.querySelectorAll('a') ?? [],
         { opacity: 0, y: -20 },
         { opacity: 1, y: 0, duration: 0.6, stagger: 0.1 },
         '-=0.4'
       )
       .fromTo(
-        buttonsRef.current?.querySelectorAll('a') || [],
+        buttonsRef.current?.querySelectorAll('a') ?? [],
         { opacity: 0, scale: 0.8 },
         { opacity: 1, scale: 1, duration: 0.6, stagger: 0.1 },
         '-=0.3'
@@ -86,7 +86,7 @@ export default function LandingHeader() {
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
-    
+
     if (!isMenuOpen) {
       gsap.fromTo(
         mobileMenuRef.current,
@@ -94,7 +94,7 @@ export default function LandingHeader() {
         { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out' }
       );
       gsap.fromTo(
-        mobileMenuRef.current?.querySelectorAll('.mobile-nav-item') || [],
+        mobileMenuRef.current?.querySelectorAll('.mobile-nav-item') ?? [],
         { opacity: 0, x: -20 },
         { opacity: 1, x: 0, duration: 0.4, stagger: 0.1, delay: 0.1 }
       );
@@ -133,7 +133,7 @@ export default function LandingHeader() {
 
         {/* Desktop Navigation */}
         <nav ref={navRef} className="hidden md:flex gap-8 items-center">
-          {navLinks.map((link, index) => (
+          {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -185,7 +185,7 @@ export default function LandingHeader() {
           <div className="px-4 py-6 space-y-4">
             {/* Mobile Navigation */}
             <nav className="space-y-2">
-              {navLinks.map((link, index) => (
+              {navLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}

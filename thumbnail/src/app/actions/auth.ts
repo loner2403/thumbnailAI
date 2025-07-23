@@ -4,7 +4,6 @@ import { signInSchema } from "~/schemas/auth";
 import { db } from "~/server/db";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { env } from "~/env";
 
 export const signup = async (email: string, password: string) => {
   // Validation

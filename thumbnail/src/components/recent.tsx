@@ -1,8 +1,6 @@
 "use server"
 
 import { Separator } from "@radix-ui/react-select";
-import { Button } from "./ui/button";
-import { auth } from "~/server/auth";
 import AWS from "aws-sdk";
 import { env } from "~/env";
 import DownloadRecentThumbnail from "./download-recent-thumbnail";

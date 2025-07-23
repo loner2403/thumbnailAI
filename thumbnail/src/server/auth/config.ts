@@ -1,33 +1,24 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
-import { type DefaultSession, type SessionStrategy } from "next-auth";
+import { type DefaultSession, type NextAuthOptions, type SessionStrategy, type User as AdapterUser, type Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { ZodError } from "zod";
 import { signInSchema } from "~/schemas/auth";
-import type { DefaultJWT } from "next-auth/jwt";
+import type { DefaultJWT, JWT } from "next-auth/jwt";
 
 import { db } from "~/server/db";
 import { env } from "~/env.js";
+import type { User } from "@prisma/client";
 
 /**
- * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
- * object and keep type safety.
- *
- * @see https://next-auth.js.org/getting-started/typescript#module-augmentation
+ * Module augmentation for `next-auth` types.
  */
 declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
-      // ...other properties
-      // role: UserRole;
     } & DefaultSession["user"];
   }
-
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
 }
 
 declare module "next-auth/jwt" {
@@ -37,11 +28,9 @@ declare module "next-auth/jwt" {
 }
 
 /**
- * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
- *
- * @see https://next-auth.js.org/configuration/options
+ * Options for NextAuth.js
  */
-export const authConfig = {
+export const authConfig: NextAuthOptions = {
   debug: process.env.NODE_ENV === "development",
   session: {
     strategy: "jwt" as SessionStrategy,
@@ -49,22 +38,21 @@ export const authConfig = {
   providers: [
     Credentials({
       credentials: {
-        email: { },
-        password: { },
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         try {
-          const {email, password} = await signInSchema.parseAsync(credentials)
+          const {email, password} = await signInSchema.parseAsync(credentials);
 
           const user = await db.user.findUnique({
             where: {
               email: email,
             },
-           
           });
 
-          if (!user) {
-            throw new Error("User not found");
+          if (!user?.password) {
+            return null;
           }
 
           const validPassword = await bcrypt.compare(password, user.password);
@@ -78,23 +66,10 @@ export const authConfig = {
           if(error instanceof ZodError){
             return null;
           }
-
-         
+         throw error;
         }
-
-
-        return null;
       }
     })
-    /**
-     * ...add more providers here.
-     *
-     * Most other providers require a bit more work than the Discord provider. For example, the
-     * GitHub provider requires you to add the `refresh_token_expires_in` field to the Account
-     * model. Refer to the NextAuth.js docs for the provider you want to use. Example:
-     *
-     * @see https://next-auth.js.org/providers/github
-     */
   ],
   pages: {
     signIn: "/signin",
@@ -103,14 +78,14 @@ export const authConfig = {
   adapter: PrismaAdapter(db),
   
   callbacks: {
-    jwt({ token, user }: { token: any; user: any }) {
+    jwt({ token, user }: { token: JWT; user?: User | AdapterUser }) {
       if (user) {
-        token.id = user.id as string;
+        token.id = user.id;
       }
       return token;
     },
-    session({ session, token }: { session: any; token: any }) {
-      if (token && session.user) {
+    session({ session, token }: { session: Session; token: JWT }) {
+      if (token && session?.user) {
         session.user.id = token.id;
       }
       return session;

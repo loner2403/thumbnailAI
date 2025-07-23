@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowUpRight } from 'lucide-react';
+import Image from 'next/image';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -73,7 +74,7 @@ export default function ShowcaseSection() {
       const itemsWithSpans = await Promise.all(
         showcaseItems.map((item, index) =>
           new Promise<ProcessedShowcaseItem>((resolve) => {
-            const img = new Image();
+            const img = new window.Image();
             img.src = item.image;
             img.onload = () => {
               const aspectRatio = img.width / img.height;
@@ -98,7 +99,7 @@ export default function ShowcaseSection() {
       setIsLoading(false);
     };
 
-    processImages();
+    processImages().catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -175,10 +176,12 @@ export default function ShowcaseSection() {
                     }}
                 >
                     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-                        <img
+                        <Image
                             src={item.data.image}
                             alt={item.data.title}
-                            className="max-w-full max-h-full object-contain transition-transform duration-500 ease-in-out group-hover:scale-105"
+                            fill
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className="object-contain transition-transform duration-500 ease-in-out group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
                         <div className="absolute bottom-0 left-0 p-5 text-white w-full">

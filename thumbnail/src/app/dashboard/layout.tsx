@@ -4,7 +4,7 @@ import Link from "next/link";
 import Credits from "~/components/credits";
 import { Button } from "~/components/ui/button";
 import "~/styles/globals.css";
-import { ImageIcon, CreditCard, Home, GithubIcon, TwitterIcon, Mail, Heart } from "lucide-react";
+import { ImageIcon, CreditCard, GithubIcon, TwitterIcon, Mail, Heart } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 
 export default async function RootLayout({

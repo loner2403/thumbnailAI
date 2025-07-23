@@ -1,8 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/create-order/route.ts
+import { type NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
 
+interface CreateOrderRequest {
+  amount: number;
+}
+
 export async function POST(req: NextRequest) {
-  const { amount } = await req.json();
+  const body = await req.json() as CreateOrderRequest;
+  const { amount } = body;
 
   if (!amount) {
     return NextResponse.json({ error: "Amount is required" }, { status: 400 });
@@ -22,7 +28,8 @@ export async function POST(req: NextRequest) {
   try {
     const order = await razorpay.orders.create(options);
     return NextResponse.json(order);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-} 
+}

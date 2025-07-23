@@ -2,7 +2,6 @@
 
 import { useForm } from "react-hook-form";
 import Link from "next/link";
-import { useState } from "react";
 import { IoMdArrowBack } from "react-icons/io";
 import {
   Card,

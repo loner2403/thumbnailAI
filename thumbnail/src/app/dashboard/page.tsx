@@ -1,12 +1,9 @@
 import { ImageIcon, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
 import DashboardClient from "./DashboardClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import Recent from "~/components/recent";
-import { env } from "process";
 import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const Page = async () => {

@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+// src/components/Modal.tsx
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 
 interface ModalProps {
@@ -8,6 +9,12 @@ interface ModalProps {
 }
 
 const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
@@ -19,7 +26,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !isClient) return null;
 
   return ReactDOM.createPortal(
     <div
@@ -43,8 +50,8 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
         </div>
       </div>
     </div>,
-    typeof window !== "undefined" ? document.body : (null as any)
+    document.body
   );
 };
 
-export default Modal; 
+export default Modal;

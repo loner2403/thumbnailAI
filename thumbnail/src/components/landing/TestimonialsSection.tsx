@@ -56,7 +56,7 @@ export default function TestimonialsSection() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 italic mb-4">"{t.quote}"</p>
+                <p className="text-gray-600 italic mb-4">{`"${t.quote}"`}</p>
                 <span className="text-gray-800 font-semibold">{t.name}</span>
               </CardContent>
             </Card>
@@ -65,4 +65,4 @@ export default function TestimonialsSection() {
       </div>
     </section>
   );
-} 
+}

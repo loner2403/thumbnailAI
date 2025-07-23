@@ -12,7 +12,7 @@ const s3 = new AWS.S3({
 
 })
 
-export const getPresignedUrl = async () => {
+export const getPresignedUrl = async (): Promise<string> => {
     const user = await getOrCreateUser();
 
     // Format date as yyyyMMddHHmmss
@@ -29,12 +29,12 @@ export const getPresignedUrl = async () => {
         ContentType: "image/png"
     };
 
-    const uploadUrl = s3.getSignedUrl("putObject", params);
+    const uploadUrl: string = s3.getSignedUrl("putObject", params);
 
     return uploadUrl;
 }
 
-export const downloadS3File = async (url: string) => {
+export const downloadS3File = async (url: string): Promise<string> => {
     const serverSession = await auth();
 
     if(!serverSession) {
@@ -53,7 +53,7 @@ export const downloadS3File = async (url: string) => {
         ResponseContentDisposition: 'attachment; filename="thumbnail.png"',
     };
 
-    const downloadUrl = s3.getSignedUrl("getObject", params);
+    const downloadUrl: string = s3.getSignedUrl("getObject", params);
 
     return downloadUrl;
 }

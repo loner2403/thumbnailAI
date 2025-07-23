@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Dropzone from "./dropzone";
@@ -17,6 +17,12 @@ interface ThumbnailCreatorProps {
   children?: React.ReactNode;
 }
 
+interface WorkerMessage {
+    success: boolean;
+    blob?: Blob;
+    error?: string;
+}
+
 const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [selectedStyle, setSelectedStyle] = useState("style1");
   const [loading, setLoading] = useState(false);
@@ -27,26 +33,21 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
   const [canvasReady, setCanvasReady] = useState(false);
   const [text, setText] = useState("POV");
   const [font, setFont] = useState("arial");
-  const [image, setImage] = useState<File | null>(null);
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [textSize, setTextSize] = useState(100); // Base text size in pixels
+  const [textSize, setTextSize] = useState(100);
   const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | null>(null);
-  
-  // Refs for cleanup
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const imageObjectsRef = useRef<HTMLImageElement[]>([]);
   const fileReaderRef = useRef<FileReader | null>(null);
 
-  // Text position and dragging states
   const [textPosition, setTextPosition] = useState({ x: 0.5, y: 0.5 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   const { state: textEffects, dispatch: dispatchTextEffects } = useTextEffects();
   const { state: imageFiltersState, dispatch: dispatchImageFilters } = useImageFilters();
 
-  // Check font loading status
   useEffect(() => {
     const checkFonts = async () => {
       try {
@@ -61,25 +62,22 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
         setFontsLoaded(true);
       }
     };
-    
-    checkFonts();
+    checkFonts().catch(console.error);
   }, []);
 
-  // Cleanup function for component unmount
   useEffect(() => {
+    const abortController = abortControllerRef.current;
+    const fileReader = fileReaderRef.current;
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (abortController) {
+        abortController.abort();
       }
-      
-      if (fileReaderRef.current) {
-        fileReaderRef.current.abort();
+      if (fileReader) {
+        fileReader.abort();
       }
-      
       if (processedImageSrc) {
         URL.revokeObjectURL(processedImageSrc);
       }
-      
       imageObjectsRef.current.forEach(img => {
         img.onload = null;
         img.onerror = null;
@@ -87,59 +85,18 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       });
       imageObjectsRef.current = [];
     };
-  }, []);
-
-  // Cleanup processed image URL when it changes
-  useEffect(() => {
-    return () => {
-      if (processedImageSrc) {
-        URL.revokeObjectURL(processedImageSrc);
-      }
-    };
   }, [processedImageSrc]);
 
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Add console logs for debugging state changes
-  useEffect(() => {
-    console.log("Modal open state changed:", modalOpen);
-  }, [modalOpen]);
-  useEffect(() => {
-    console.log("Image src changed:", imageSrc);
-  }, [imageSrc]);
-  useEffect(() => {
-    console.log("Processed image src changed:", processedImageSrc);
-  }, [processedImageSrc]);
-  useEffect(() => {
-    console.log("Error state changed:", error);
-  }, [error]);
-  useEffect(() => {
-    console.log("Text position changed:", textPosition);
-  }, [textPosition]);
-  useEffect(() => {
-    console.log("Text size changed:", textSize);
-  }, [textSize]);
-
-  useEffect(() => {
-    console.log("ThumbnailCreator mounted");
-    return () => {
-      console.log("ThumbnailCreator unmounted");
-    };
-  }, []);
-
   const setSelectedImage = async (file?: File) => {
     if (!file) return;
-    console.log("Image selected:", file);
     setModalOpen(true);
-
     setLoading(true);
     setError(null);
-    setImage(file);
 
-    // Let the loader render before heavy work
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    // Store original dimensions
     const img = new Image();
     img.onload = () => {
       setOriginalDimensions({ width: img.width, height: img.height });
@@ -147,24 +104,20 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     };
     img.src = URL.createObjectURL(file);
 
-    // Use object URL for instant, non-blocking preview
     const src = URL.createObjectURL(file);
     setImageSrc(src);
 
-    // Cancel any existing operations
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
-    // Use a dedicated Web Worker for background removal
     try {
-      // Dynamically import the worker (Vite/Next.js 13+ syntax)
       const worker = new Worker(new URL('./backgroundRemoval.worker.js', import.meta.url));
       worker.postMessage({ imageUrl: src });
 
-      worker.onmessage = async (e) => {
+      worker.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         const { success, blob, error } = e.data;
-        if (success) {
+        if (success && blob) {
           if (processedImageSrc) {
             URL.revokeObjectURL(processedImageSrc);
           }
@@ -173,106 +126,90 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
           setCanvasReady(true);
           setLoading(false);
 
-          // Deduct credits after image is generated
           try {
             const res = await fetch("/api/deduct-credits", { method: "POST" });
-            const data = await res.json();
+            const data = await res.json() as { success: boolean, error?: string };
             if (!data.success) {
-              setError("Failed to deduct credits. " + (data.error || "You may not have enough credits left."));
-              // Optionally, you can disable further actions here
+              setError(`Failed to deduct credits. ${data.error ?? "You may not have enough credits left."}`);
               return;
             }
-          } catch (err) {
+          } catch {
             setError("Failed to deduct credits. Please try again.");
-            return;
           }
         } else {
-          setError("Failed to remove background: " + error);
+          setError(`Failed to remove background: ${error}`);
           setLoading(false);
         }
         worker.terminate();
       };
-    } catch (error) {
+    } catch {
       setError("Failed to process the image. Please try again.");
       setLoading(false);
     }
   };
-
-  // Generate composite CSS filter string with proper intensity application
+  
   const getCompositeFilter = useCallback(() => {
     const filter = imageFilters[imageFiltersState.selectedFilter as keyof typeof imageFilters];
     const intensity = imageFiltersState.filterIntensity / 100;
     
     let filterString = "";
     
-    // Apply base filter with intensity
-    if (filter.filter && filter.filter !== "") {
-      if (imageFiltersState.selectedFilter === "grayscale") {
-        filterString += `grayscale(${intensity * 100}%)`;
-      } else if (imageFiltersState.selectedFilter === "sepia") {
-        filterString += `sepia(${intensity * 100}%)`;
-      } else if (imageFiltersState.selectedFilter === "invert") {
-        filterString += `invert(${intensity * 100}%)`;
-      } else if (imageFiltersState.selectedFilter === "blur") {
-        filterString += `blur(${intensity * 2}px)`;
-      } else if (imageFiltersState.selectedFilter === "contrast") {
-        const contrastValue = 100 + (50 * intensity);
-        filterString += `contrast(${contrastValue}%)`;
-      } else if (imageFiltersState.selectedFilter === "brightness") {
-        const brightnessValue = 100 + (30 * intensity);
-        filterString += `brightness(${brightnessValue}%)`;
-      } else if (imageFiltersState.selectedFilter === "saturate") {
-        const saturateValue = 100 + (100 * intensity);
-        filterString += `saturate(${saturateValue}%)`;
-      }
+    if (filter.filter) {
+        switch(imageFiltersState.selectedFilter) {
+            case "grayscale":
+            case "sepia":
+            case "invert":
+                filterString += `${imageFiltersState.selectedFilter}(${intensity * 100}%)`;
+                break;
+            case "blur":
+                filterString += `blur(${intensity * 2}px)`;
+                break;
+            case "contrast":
+                filterString += `contrast(${100 + (50 * intensity)}%)`;
+                break;
+            case "brightness":
+                filterString += `brightness(${100 + (30 * intensity)}%)`;
+                break;
+            case "saturate":
+                filterString += `saturate(${100 + (100 * intensity)}%)`;
+                break;
+        }
     }
     
-    // Add adjustment filters
     if (imageFiltersState.filterBrightness !== 100) {
-      filterString += filterString ? ` brightness(${imageFiltersState.filterBrightness}%)` : `brightness(${imageFiltersState.filterBrightness}%)`;
+      filterString += ` brightness(${imageFiltersState.filterBrightness}%)`;
     }
     
     if (imageFiltersState.filterContrast !== 100) {
-      filterString += filterString ? ` contrast(${imageFiltersState.filterContrast}%)` : `contrast(${imageFiltersState.filterContrast}%)`;
+      filterString += ` contrast(${imageFiltersState.filterContrast}%)`;
     }
     
     if (imageFiltersState.filterSaturation !== 100) {
-      filterString += filterString ? ` saturate(${imageFiltersState.filterSaturation}%)` : `saturate(${imageFiltersState.filterSaturation}%)`;
+      filterString += ` saturate(${imageFiltersState.filterSaturation}%)`;
     }
     
-    console.log('filterString:', filterString); // Log the filter string for debugging
-    return filterString;
+    return filterString.trim();
   }, [imageFiltersState]);
-  
-  // Mouse event handlers for dragging
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
-    
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
-    
-    // Check if click is near the text
     const textX = textPosition.x * rect.width;
     const textY = textPosition.y * rect.height;
     const distance = Math.sqrt(Math.pow(x * rect.width - textX, 2) + Math.pow(y * rect.height - textY, 2));
-    
-    if (distance < 50) { // 50px click radius
+    if (distance < 50) {
       setIsDragging(true);
-      dragStartPos.current = {
-        x: x - textPosition.x,
-        y: y - textPosition.y
-      };
+      dragStartPos.current = { x: x - textPosition.x, y: y - textPosition.y };
     }
   }, [textPosition]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !canvasRef.current) return;
-    
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
-    
     setTextPosition({
       x: Math.max(0, Math.min(1, x - dragStartPos.current.x)),
       y: Math.max(0, Math.min(1, y - dragStartPos.current.y))
@@ -283,31 +220,18 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
     setIsDragging(false);
   }, []);
 
-  // Add event listeners for mouse up outside canvas
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (isDragging) {
-        setIsDragging(false);
-      }
+      if (isDragging) setIsDragging(false);
     };
-
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-    };
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [isDragging]);
 
-  // Modify the drawCompositeImage function to use custom text size
   const drawCompositeImage = useCallback(() => {
-    console.log('Starting drawCompositeImage at:', performance.now());
-    if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc || !fontsLoaded) {
-      console.log('Skipping draw - missing required elements');
-      return;
-    }
+    if (!canvasRef.current || !canvasReady || !imageSrc || !processedImageSrc || !fontsLoaded) return;
 
-    // Use requestAnimationFrame for smooth rendering
     requestAnimationFrame(() => {
-      console.log('requestAnimationFrame callback at:', performance.now());
       const canvas = canvasRef.current;
       if (!canvas) return;
       
@@ -316,10 +240,13 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
         desynchronized: true,
         imageSmoothingEnabled: true,
         imageSmoothingQuality: 'high'
-      }) as CanvasRenderingContext2D;
-      if (!ctx) return;
+      });
+      
+      if (!(ctx instanceof CanvasRenderingContext2D)) {
+        console.error("Failed to get 2D rendering context");
+        return;
+      }
 
-      // Clear any existing image objects
       imageObjectsRef.current.forEach(img => {
         img.onload = null;
         img.onerror = null;
@@ -329,12 +256,8 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       const bgImg = new window.Image();
       imageObjectsRef.current.push(bgImg);
       
-      console.time('Background image load');
       bgImg.onload = () => {
-        console.timeEnd('Background image load');
-        console.time('Canvas drawing operations');
         try {
-          // --- Improved scaling logic ---
           const MAX_CANVAS_HEIGHT = 500;
           const MAX_CANVAS_WIDTH = 800;
           
@@ -342,11 +265,9 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
           let drawHeight = bgImg.height;
           let scale = 1;
           
-          // Calculate scale based on both width and height constraints
           const heightScale = bgImg.height > MAX_CANVAS_HEIGHT ? MAX_CANVAS_HEIGHT / bgImg.height : 1;
           const widthScale = bgImg.width > MAX_CANVAS_WIDTH ? MAX_CANVAS_WIDTH / bgImg.width : 1;
           
-          // Use the smaller scale to ensure image fits within both constraints
           scale = Math.min(heightScale, widthScale);
           
           if (scale < 1) {
@@ -354,78 +275,50 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
             drawHeight = Math.round(bgImg.height * scale);
           }
           
-          // Get device pixel ratio for high-quality rendering
-          const devicePixelRatio = window.devicePixelRatio || 1;
-          
-          // Set canvas internal dimensions (for high quality)
+          const devicePixelRatio = window.devicePixelRatio ?? 1;
           const canvasWidth = drawWidth * devicePixelRatio;
           const canvasHeight = drawHeight * devicePixelRatio;
           
           if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
-            
-            // IMPORTANT: Set the display size using CSS
             canvas.style.width = `${drawWidth}px`;
             canvas.style.height = `${drawHeight}px`;
           }
 
-          // Reset any existing transformations
           ctx.setTransform(1, 0, 0, 1, 0, 0);
-          
-          // Scale the context to match the device pixel ratio
           ctx.scale(devicePixelRatio, devicePixelRatio);
-
-          // Enable high-quality image rendering
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
-
-          // Clear canvas
           ctx.clearRect(0, 0, drawWidth, drawHeight);
 
-          // Calculate center position for the image
           const x = (drawWidth - bgImg.width * scale) / 2;
           const y = (drawHeight - bgImg.height * scale) / 2;
 
-          // Apply image filters to background
           ctx.filter = getCompositeFilter();
-          // Draw the image centered
           ctx.drawImage(bgImg, x, y, bgImg.width * scale, bgImg.height * scale);
           ctx.filter = "none";
 
           let preset = presets.style1;
-          switch (selectedStyle) {
-            case "style2":
-              preset = presets.style2;
-              break;
-            case "style3":
-              preset = presets.style3;
-              break;
-          }
+          if (selectedStyle === "style2") preset = presets.style2;
+          else if (selectedStyle === "style3") preset = presets.style3;
 
           ctx.save();
-
-          // Text rendering logic
           try {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
-            let selectFont = FONT_OPTIONS.find(f => f.value === font)?.css || 'Arial, sans-serif';
-            
-            // Use custom text size directly
+            const selectFont = FONT_OPTIONS.find(f => f.value === font)?.css ?? 'Arial, sans-serif';
             ctx.font = `${preset.fontWeight} ${textSize}px ${selectFont}`;
             
-            // Calculate text dimensions for gradient
             const textMetrics = ctx.measureText(text);
             const textWidth = textMetrics.width;
             
-            // Use textPosition for x and y coordinates
-            const x = drawWidth * textPosition.x;
-            const y = drawHeight * textPosition.y;
+            const textX = drawWidth * textPosition.x;
+            const textY = drawHeight * textPosition.y;
             
-            ctx.translate(x, y);
+            ctx.translate(textX, textY);
 
-            // Apply text shadow if enabled
             if (textEffects.textShadow) {
               ctx.shadowColor = textEffects.shadowColor;
               ctx.shadowBlur = textEffects.shadowBlur;
@@ -433,30 +326,25 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
               ctx.shadowOffsetY = 2;
             }
 
-            // Draw text outline if enabled (apply opacity to outline as well)
             if (textEffects.textOutline) {
               ctx.lineWidth = textEffects.outlineWidth;
               ctx.strokeStyle = textEffects.outlineColor;
-              // Apply opacity to outline when gradient is used
               if (textEffects.useGradient) {
                 ctx.globalAlpha = textEffects.textOpacity / 100;
               }
               ctx.strokeText(text, 0, 0);
-              // Reset alpha for fill
               ctx.globalAlpha = 1;
             }
 
-            // Apply gradient fill if enabled
             if (textEffects.useGradient) {
               const angle = (textEffects.gradientDirection * Math.PI) / 180;
               const x1 = Math.cos(angle) * textWidth / 2;
-              const y1 = Math.sin(angle) * textSize / 2; // Use textSize instead of fontSize
+              const y1 = Math.sin(angle) * textSize / 2;
               
               const gradient = ctx.createLinearGradient(-x1, -y1, x1, y1);
               gradient.addColorStop(0, textEffects.gradientColor1);
               gradient.addColorStop(1, textEffects.gradientColor2);
               ctx.fillStyle = gradient;
-              // Apply custom text opacity for gradient
               ctx.globalAlpha = textEffects.textOpacity / 100;
             } else {
               ctx.fillStyle = preset.color;
@@ -465,145 +353,85 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
             ctx.fillText(text, 0, 0);
 
-            // Reset context state
             ctx.shadowColor = "transparent";
             ctx.shadowBlur = 0;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             ctx.globalAlpha = 1;
-
           } finally {
             ctx.restore();
           }
 
-          // Draw the foreground image centered as well
           const fgImg = new window.Image();
           imageObjectsRef.current.push(fgImg);
-
           fgImg.onload = () => {
-            console.time('Foreground image draw');
             try {
-              // Ensure high quality for foreground image too
               ctx.imageSmoothingEnabled = true;
               ctx.imageSmoothingQuality = 'high';
               ctx.drawImage(fgImg, x, y, bgImg.width * scale, bgImg.height * scale);
-              console.timeEnd('Foreground image draw');
-              console.timeEnd('Canvas drawing operations');
-              console.log('Completed all drawing operations at:', performance.now());
             } catch (error) {
               console.error("Error drawing foreground image:", error);
               setError("Failed to draw foreground image.");
             }
           };
-
-          fgImg.onerror = () => {
-            console.error("Failed to load foreground image");
-            setError("Failed to load processed image.");
-          };
-
+          fgImg.onerror = () => setError("Failed to load processed image.");
           fgImg.src = processedImageSrc;
-
         } catch (error) {
           console.error("Error in background image drawing:", error);
           setError("Failed to draw background image.");
         }
       };
-      
-      bgImg.onerror = () => {
-        console.error("Failed to load background image");
-        setError("Failed to load background image.");
-      };
-
+      bgImg.onerror = () => setError("Failed to load background image.");
       bgImg.src = imageSrc;
     });
-  }, [
-    canvasReady, 
-    text, 
-    font, 
-    selectedStyle, 
-    imageSrc, 
-    processedImageSrc, 
-    textEffects,
-    getCompositeFilter,
-    fontsLoaded,
-    textPosition,
-    textSize,
-  ]);
+  }, [canvasReady, text, font, selectedStyle, imageSrc, processedImageSrc, textEffects, getCompositeFilter, fontsLoaded, textPosition, textSize]);
 
-  // Debounced draw for general effect changes (100ms)
-  const debouncedDrawCompositeImage = useDebounce(() => {
-    console.log('Debounced drawCompositeImage triggered at:', performance.now());
-    drawCompositeImage();
-  }, 100);
+  const debouncedDrawCompositeImage = useDebounce(drawCompositeImage, 100);
 
-  // Use debounced version for general text/effect changes
   useEffect(() => {
     if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
-      console.log('useEffect triggered draw at:', performance.now(), 
-        { canvasReady, imageSrc: !!imageSrc, processedImageSrc: !!processedImageSrc, fontsLoaded });
       debouncedDrawCompositeImage();
     }
-  }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded]);
+  }, [debouncedDrawCompositeImage, canvasReady, imageSrc, processedImageSrc, fontsLoaded, text, font, selectedStyle, textEffects]);
 
-  // Direct draw for text dragging and text size changes (no debounce)
   useEffect(() => {
     if (canvasReady && imageSrc && processedImageSrc && fontsLoaded) {
       drawCompositeImage();
     }
-  }, [canvasReady, imageSrc, processedImageSrc, fontsLoaded, textPosition, textSize]);
+  }, [canvasReady, imageSrc, processedImageSrc, fontsLoaded, textPosition, textSize, drawCompositeImage]);
 
-  // Optimize download function
   const handleDownload = useCallback(async () => {
-    console.log("Download button clicked");
     if (!canvasRef.current || !originalDimensions) return;
-    
     try {
-      
-      
-      // Create a temporary canvas for high-resolution export
       const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d', {
-        alpha: true,
-        debsynchronized: true,
-        imageSmoothingEnabled: true,
-        imageSmoothingQuality: 'high',
-      }) as CanvasRenderingContext2D;
-      
+      const tempCtx = tempCanvas.getContext('2d');
       if (!tempCtx) return;
       
-      // Set the canvas to original dimensions
       tempCanvas.width = originalDimensions.width;
       tempCanvas.height = originalDimensions.height;
-       
-      // Draw the current canvas content scaled to original dimensions
       tempCtx.drawImage(canvasRef.current, 0, 0, originalDimensions.width, originalDimensions.height);
       
-      // Convert to blob, upload to S3, and download locally
-      tempCanvas.toBlob(async (blob) => {
-        if(blob) {
-          try {
-            // TODO: Replace with API call to get presigned URL
-            const uploadUrl = await getPresignedUrl();
-            await fetch(uploadUrl, {
-              method: "PUT",
-              body: blob,
-              headers: {
-                "Content-Type": "image/png",
-              }
-            });
-            console.log("File uploaded successfully!");
-
-            // Download the image locally
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
-            link.href = url;
-            link.click();
-            URL.revokeObjectURL(url);
-          } catch (error) {
-            console.error("Error uploading or downloading image:", error);
-            setError("Failed to upload or download image.");
-          }
+      tempCanvas.toBlob((blob) => {
+        if (blob) {
+          void (async () => {  // Add 'void' here to ignore the promise
+            try {
+              const uploadUrl = await getPresignedUrl();
+              await fetch(uploadUrl, {
+                method: "PUT",
+                body: blob,
+                headers: { "Content-Type": "image/png" }
+              });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.download = `thumbnail-${originalDimensions.width}x${originalDimensions.height}.png`;
+              link.href = url;
+              link.click();
+              URL.revokeObjectURL(url);
+            } catch (error) {
+              console.error("Error uploading or downloading image:", error);
+              setError("Failed to upload or download image.");
+            }
+          })();
         }
       }, 'image/png', 1.0);
     } catch (error) {
@@ -611,21 +439,14 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       setError("Failed to download image.");
     }
   }, [originalDimensions]);
+  
+  
 
   const handleReset = async () => {
-    console.log("Reset button clicked");
     try {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      
-      if (fileReaderRef.current) {
-        fileReaderRef.current.abort();
-      }
-      
-      if (processedImageSrc) {
-        URL.revokeObjectURL(processedImageSrc);
-      }
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (fileReaderRef.current) fileReaderRef.current.abort();
+      if (processedImageSrc) URL.revokeObjectURL(processedImageSrc);
       
       imageObjectsRef.current.forEach(img => {
         img.onload = null;
@@ -637,7 +458,6 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
       setImageSrc(null);
       setProcessedImageSrc(null);
       setCanvasReady(false);
-      setImage(null);
       setError(null);
       setModalOpen(false);
       
@@ -649,7 +469,6 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
 
   return (
     <>
-      {/* Main page: only style selection and upload */}
       {!modalOpen && (
         <div className="flex flex-col mx-3">
           <div className="space-y-6">
@@ -669,8 +488,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
           <div className="mt-8">{children}</div>
         </div>
       )}
-      {/* Modal for processing, editing, and download */}
-      <Modal open={modalOpen} onClose={handleReset}>
+      <Modal open={modalOpen} onClose={() => { void handleReset(); }}>
         {imageSrc ? (
           <>
             {loading ? (
@@ -690,14 +508,12 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                   </div>
                 </div>
                 <EditorSidebar
-                  // Text tab
                   text={text}
                   setText={setText}
                   textSize={textSize}
                   setTextSize={setTextSize}
                   font={font}
                   setFont={setFont}
-                  // Effects tab
                   textShadow={textEffects.textShadow}
                   setTextShadow={(b) => dispatchTextEffects({ type: 'SET_SHADOW', value: b })}
                   shadowBlur={textEffects.shadowBlur}
@@ -720,7 +536,6 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                   setGradientDirection={(n) => dispatchTextEffects({ type: 'SET_GRADIENT_DIRECTION', value: n })}
                   textOpacity={textEffects.textOpacity}
                   setTextOpacity={(n) => dispatchTextEffects({ type: 'SET_TEXT_OPACITY', value: n })}
-                  // Filters tab
                   selectedFilter={imageFiltersState.selectedFilter}
                   setSelectedFilter={(f) => dispatchImageFilters({ type: 'SET_FILTER', value: f })}
                   filterIntensity={imageFiltersState.filterIntensity}
@@ -731,8 +546,7 @@ const ThumbnailCreator: React.FC<ThumbnailCreatorProps> = ({ children }) => {
                   setFilterContrast={(n) => dispatchImageFilters({ type: 'SET_CONTRAST', value: n })}
                   filterSaturation={imageFiltersState.filterSaturation}
                   setFilterSaturation={(n) => dispatchImageFilters({ type: 'SET_SATURATION', value: n })}
-                  // Actions
-                  onDownload={handleDownload}
+                  onDownload={() => { void handleDownload(); }}
                   onUpdate={drawCompositeImage}
                   error={error}
                   onDismissError={() => setError(null)}

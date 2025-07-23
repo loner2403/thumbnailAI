@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 

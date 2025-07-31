@@ -17,7 +17,6 @@ import { Button } from "./button";
 import { z } from "zod";
 import { signInSchema } from "~/schemas/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import { signup } from "~/app/actions/auth";
 import { toast } from "sonner";
 

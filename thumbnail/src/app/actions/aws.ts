@@ -6,9 +6,9 @@ import { auth } from "~/server/auth";
 import { getOrCreateUser } from "~/server/auth/getOrCreateUser";
 
 const s3 = new AWS.S3({
-    accessKeyId: env.AWS_ACCESS_KEY,
-    secretAccessKey: env.AWS_SECRET_KEY,
-    region: env.AWS_REGION
+    accessKeyId: env.MY_AWS_ACCESS_KEY,
+    secretAccessKey: env.MY_AWS_SECRET_KEY,
+    region: env.MY_AWS_REGION
 
 })
 
@@ -23,7 +23,7 @@ export const getPresignedUrl = async (): Promise<string> => {
     const key = `${userId}/thumbnail-${timestamp}.png`;
 
     const params = {
-        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Bucket: env.MY_AWS_THUMBNAIL_BUCKET,
         Key: key,
         Expires: 60,
         ContentType: "image/png"
@@ -42,12 +42,12 @@ export const downloadS3File = async (url: string): Promise<string> => {
     }
 
     const key = url.replace(
-        `https://${env.AWS_THUMBNAIL_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/`,
+        `https://${env.MY_AWS_THUMBNAIL_BUCKET}.s3.${env.MY_AWS_REGION}.amazonaws.com/`,
         ""
     )
 
     const params = {
-        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Bucket: env.MY_AWS_THUMBNAIL_BUCKET,
         Key: key,
         Expires: 3600,
         ResponseContentDisposition: 'attachment; filename="thumbnail.png"',

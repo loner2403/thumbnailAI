@@ -1,9 +1,8 @@
 // src/app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth/next";
 import { authConfig } from "~/server/auth/config";
-import type { NextApiHandler } from "next";
 
-const handler = NextAuth(authConfig) as NextApiHandler;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const handler = NextAuth(authConfig);
 
-export const GET = handler;
-export const POST = handler;
+export { handler as GET, handler as POST };

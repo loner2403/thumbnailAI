@@ -11,16 +11,16 @@ const Recent = async () => {
     const user = await getOrCreateUser();
 
     const s3 = new AWS.S3({
-        accessKeyId: env.AWS_ACCESS_KEY,
-        secretAccessKey: env.AWS_SECRET_KEY,
-        region: env.AWS_REGION
+        accessKeyId: env.MY_AWS_ACCESS_KEY,
+        secretAccessKey: env.MY_AWS_SECRET_KEY,
+        region: env.MY_AWS_REGION
     
     })
 
     const prefix = `${user.id}/`;
 
     const params = {
-        Bucket: env.AWS_THUMBNAIL_BUCKET,
+        Bucket: env.MY_AWS_THUMBNAIL_BUCKET,
         Prefix: prefix,
         MaxKeys: 10
     };
@@ -34,7 +34,7 @@ const Recent = async () => {
             return dateB - dateA;
         })
         .map((item) => ({
-            url: `https://${env.AWS_THUMBNAIL_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${item.Key}`,
+            url: `https://${env.MY_AWS_THUMBNAIL_BUCKET}.s3.${env.MY_AWS_REGION}.amazonaws.com/${item.Key}`,
             createdAt: item.LastModified
         }));
 

@@ -15,11 +15,11 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-
-      AWS_ACCESS_KEY: z.string(),
-      AWS_SECRET_KEY: z.string(),
-      AWS_REGION: z.string(),
-      AWS_THUMBNAIL_BUCKET: z.string()
+    MY_AWS_ACCESS_KEY: z.string(),
+    MY_AWS_SECRET_KEY: z.string(),
+    MY_AWS_REGION: z.string(),
+    MY_AWS_THUMBNAIL_BUCKET: z.string(),
+    CLERK_SECRET_KEY: z.string(),
   },
 
   /**
@@ -28,7 +28,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string(),
   },
 
   /**
@@ -39,11 +39,12 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
-    AWS_ACCESS_KEY: process.env.AWS_ACCESS_KEY,
-    AWS_SECRET_KEY: process.env.AWS_SECRET_KEY,
-    AWS_THUMBNAIL_BUCKET: process.env.AWS_THUMBNAILS_BUCKET,
-    AWS_REGION: process.env.AWS_REGION,
-
+    MY_AWS_ACCESS_KEY: process.env.MY_AWS_ACCESS_KEY,
+    MY_AWS_SECRET_KEY: process.env.MY_AWS_SECRET_KEY,
+    MY_AWS_REGION: process.env.MY_AWS_REGION,
+    MY_AWS_THUMBNAIL_BUCKET: process.env.MY_AWS_THUMBNAIL_BUCKET,
+    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

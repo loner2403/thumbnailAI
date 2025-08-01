@@ -8,8 +8,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ClerkProvider
           afterSignInUrl="/dashboard"
           afterSignUpUrl="/dashboard"
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
+          signInUrl="/signin"
+          signUpUrl="/signup"
         >
           {children}
         </ClerkProvider>

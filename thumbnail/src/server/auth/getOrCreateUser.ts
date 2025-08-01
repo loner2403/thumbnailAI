@@ -37,9 +37,9 @@ export async function getOrCreateUser() {
               password: "", // Clerk handles authentication
             },
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Handle race condition - user might have been created by another request
-          if (error.code === 'P2002') {
+          if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
             user = await db.user.findUnique({ where: { email } });
             if (!user) {
               throw error; // Re-throw if still not found

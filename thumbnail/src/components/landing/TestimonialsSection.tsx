@@ -8,7 +8,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
   {
-    quote: "ThumbnailAI made my YouTube workflow so much faster! The AI background removal is magic.",
+    quote: "ThumbnailAI made my YouTube workflow so much faster! The text-behind-subject effect is magic.",
     name: "Alex J.",
   },
   {

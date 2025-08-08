@@ -10,17 +10,17 @@ const steps = [
   {
     icon: <UploadCloud size={40} className="text-blue-500" />,
     title: 'Upload Your Image',
-    desc: 'Start by uploading your image. Our AI takes care of the rest.',
+    desc: 'Start by uploading your photo. We prep it for clean, pro results.',
   },
   {
     icon: <Sparkles size={40} className="text-blue-500" />,
-    title: 'Customize with AI',
-    desc: 'Remove backgrounds, add text, and apply styles in seconds.',
+    title: 'Add & Style Text',
+    desc: 'Place text behind the main subject, drag to position, tweak fonts, colors, outlines, shadows and gradients.',
   },
   {
     icon: <Download size={40} className="text-blue-500" />,
     title: 'Download & Share',
-    desc: 'Export your finished thumbnail and use it anywhere.',
+    desc: 'Export your finished thumbnail with filters applied and share anywhere.',
   },
 ];
 

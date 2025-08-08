@@ -15,6 +15,10 @@ const faqs = [
     a: "You can upload PNG, JPG, and JPEG files.",
   },
   {
+    q: "Do you remove backgrounds?",
+    a: "No. ThumbnailAI focuses on placing your text behind the main subject to achieve a premium look without full background removal.",
+  },
+  {
     q: "Can I use my own fonts?",
     a: "Currently, you can choose from a wide range of built-in fonts. Custom font upload is coming soon!",
   },

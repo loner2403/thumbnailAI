@@ -25,7 +25,7 @@ export default function FinalCTASection() {
   return (
     <section ref={sectionRef} className="w-full py-20 flex flex-col items-center justify-center text-center bg-gray-200">
       <h2 className="cta-animate text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">Boost Your Views with Better Thumbnails</h2>
-      <p className="cta-animate text-lg text-gray-600 mb-8 max-w-xl mx-auto">Start creating eye-catching thumbnails with AI-powered tools. Sign up now and get free credits to try it out!</p>
+      <p className="cta-animate text-lg text-gray-600 mb-8 max-w-xl mx-auto">Create scroll‑stopping thumbnails with subject‑aware text layering, ready‑made templates, and powerful filters. Sign up now and get free credits to try it out!</p>
       <a
         href="/signup"
         className="cta-animate inline-flex items-center gap-2 px-8 py-4 rounded-lg bg-blue-500 text-white font-bold text-lg shadow-md hover:bg-blue-600 transition-all"
@@ -34,4 +34,4 @@ export default function FinalCTASection() {
       </a>
     </section>
   );
-} 
+}

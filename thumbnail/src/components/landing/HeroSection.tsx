@@ -165,11 +165,11 @@ export default function HeroSection() {
         </h1>
 
         <p className="text-lg md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-          Effortlessly remove backgrounds, add eye-catching text, and choose from professional templates to make your videos stand out.
+          Upload a photo, place bold text behind the main subject, then fine‑tune fonts, colors, effects and templates to craft scroll‑stopping thumbnails.
         </p>
 
         <a
-          href="#features"
+          href="/signup"
           className="cta-button group inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 mb-16"
         >
           Get Started for Free 

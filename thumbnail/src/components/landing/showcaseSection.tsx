@@ -24,11 +24,7 @@ const showcaseItems = [
     description: "High-contrast and dramatic lighting.",
     image: "/style3.png",
   },
-  {
-    title: "Bold and Contrasting",
-    description: "Use high contrast to grab attention.",
-    image: "/harshal.png",
-  },
+  
   {
     title: "Sleek and Professional",
     description: "Perfect for corporate or serious content.",

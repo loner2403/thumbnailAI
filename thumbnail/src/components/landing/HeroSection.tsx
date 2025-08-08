@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Sparkles, Zap, Image } from 'lucide-react';
+import { track } from '@vercel/analytics';
 import gsap from 'gsap';
 
 export default function HeroSection() {
@@ -170,6 +171,7 @@ export default function HeroSection() {
 
         <a
           href="/signup"
+          onClick={() => track('cta_get_started_click', { location: 'hero' })}
           className="cta-button group inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 mb-16"
         >
           Get Started for Free 

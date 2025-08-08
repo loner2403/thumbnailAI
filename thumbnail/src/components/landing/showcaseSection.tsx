@@ -62,6 +62,7 @@ const calculateGridSpan = (aspectRatio: number) => {
 export default function ShowcaseSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [processedItems, setProcessedItems] = useState<ProcessedShowcaseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -144,8 +145,35 @@ export default function ShowcaseSection() {
     );
   }, [isLoading]); // Rerun animations when loading is complete
 
+  // 3D tilt interaction for cards
+  const handleMouseMove = (index: number) => (e: React.MouseEvent<HTMLDivElement>) => {
+    const card = cardRefs.current[index];
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const rotateY = ((x / rect.width) - 0.5) * 10; // -5deg to 5deg
+    const rotateX = -((y / rect.height) - 0.5) * 10; // -5deg to 5deg
+    gsap.to(card, {
+      rotateY,
+      rotateX,
+      transformPerspective: 800,
+      duration: 0.3,
+      ease: 'power2.out',
+    });
+  };
+
+  const handleMouseLeave = (index: number) => () => {
+    const card = cardRefs.current[index];
+    if (!card) return;
+    gsap.to(card, { rotateX: 0, rotateY: 0, duration: 0.5, ease: 'power3.out' });
+  };
+
   return (
-    <section ref={sectionRef} className="py-24 bg-gray-50 overflow-hidden">
+    <section ref={sectionRef} className="relative py-24 bg-gray-50 overflow-hidden">
+      {/* background accents */}
+      <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-gradient-to-br from-pink-500/15 to-orange-500/15 blur-3xl" />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16 max-w-3xl mx-auto">
           <h2 ref={titleRef} className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-4 tracking-tight">
@@ -154,6 +182,37 @@ export default function ShowcaseSection() {
           <p className="text-lg text-gray-600">
             From minimal to cinematic, generate the perfect thumbnail for your content.
           </p>
+        </div>
+        {/* marquee previews */}
+        <div className="relative mb-12">
+          <div className="marquee overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+            <div className="track flex gap-4 items-center">
+              {[...showcaseItems, ...showcaseItems].map((item, i) => (
+                <div key={`mq1-${i}`} className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/70 backdrop-blur border border-gray-200/60 shadow-sm">
+                  <div className="relative h-10 w-10 overflow-hidden rounded-full ring-1 ring-gray-200/70">
+                    <Image src={item.image} alt={item.title} fill className="object-cover" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">
+                    {item.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="marquee marquee--reverse mt-4 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+            <div className="track flex gap-4 items-center">
+              {[...showcaseItems, ...showcaseItems].map((item, i) => (
+                <div key={`mq2-${i}`} className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/70 backdrop-blur border border-gray-200/60 shadow-sm">
+                  <div className="relative h-10 w-10 overflow-hidden rounded-full ring-1 ring-gray-200/70">
+                    <Image src={item.image} alt={item.title} fill className="object-cover" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">
+                    {item.description}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
         
         {isLoading ? (
@@ -165,7 +224,10 @@ export default function ShowcaseSection() {
                 {processedItems.map((item) => (
                 <div
                     key={item.id}
-                    className="showcase-item group relative rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
+                    ref={(el) => { cardRefs.current[item.id] = el; }}
+                    onMouseMove={handleMouseMove(item.id)}
+                    onMouseLeave={handleMouseLeave(item.id)}
+                    className="showcase-item group relative rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-transform duration-300 will-change-transform"
                     style={{
                         gridColumn: `span ${item.gridSpan.colSpan}`,
                         gridRow: `span ${item.gridSpan.rowSpan}`,
@@ -177,7 +239,7 @@ export default function ShowcaseSection() {
                             alt={item.data.title}
                             fill
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            className="object-contain transition-transform duration-500 ease-in-out group-hover:scale-105"
+                            className="object-contain transition-transform duration-500 ease-in-out group-hover:scale-[1.06]"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
                         <div className="absolute bottom-0 left-0 p-5 text-white w-full">
@@ -201,6 +263,22 @@ export default function ShowcaseSection() {
             </div>
         )}
       </div>
+
+      {/* styled-jsx for marquee animation */}
+      <style jsx>{`
+        .marquee .track {
+          animation: marquee 22s linear infinite;
+          width: max-content;
+        }
+        .marquee--reverse .track {
+          animation-direction: reverse;
+          animation-duration: 26s;
+        }
+        @keyframes marquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+      `}</style>
     </section>
   );
 }
